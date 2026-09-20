@@ -51,7 +51,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     setState(() {
       _isConnecting = false;
       _apiStatus = 'Backend Operational (8080)';
-      _statusColor = Colors.emerald;
+      _statusColor = const Color(0xFF10B981);
     });
   }
 
@@ -93,7 +93,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                           decoration: BoxDecoration(
                             color: _statusColor.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.Border.all(color: _statusColor),
+                            border: Border.all(color: _statusColor),
                           ),
                           child: Text(
                             _apiStatus,
@@ -177,7 +177,7 @@ class _ParcelCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(status, style: const TextStyle(color: Colors.emeraldAccent, fontWeight: FontWeight.bold)),
+            Text(status, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
             Text('ETA: $eta', style: const TextStyle(color: Colors.white54, fontSize: 11)),
           ],
         ),

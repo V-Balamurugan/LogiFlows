@@ -27,7 +27,7 @@ mobile/
 
 ---
 
-## Running on a Machine with Flutter Installed
+## Running Locally
 
 ```bash
 # 1. Get packages
@@ -36,6 +36,10 @@ flutter pub get
 # 2. Run unit & widget tests
 flutter test
 
-# 3. Launch on Android Emulator, iOS Simulator, or Chrome
-flutter run
+# 3. Launch on Web Server (Port 8085)
+flutter run -d web-server --web-port 8085 --web-hostname 0.0.0.0
+
+# 4. Launch directly in Microsoft Edge / Chrome
+flutter run -d edge
 ```
+

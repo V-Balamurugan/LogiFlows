@@ -57,6 +57,14 @@ __pycache__/
 # Node / Frontend
 node_modules/
 
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
 # MS Office / Temporary Lock Files
 ~$*
+
 
