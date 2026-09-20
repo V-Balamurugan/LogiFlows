@@ -5,7 +5,7 @@
 ---
 
 ## Technology Stack
-- **Framework**: Python 3.14 / FastAPI
+- **Framework**: Python 3.12+ / FastAPI
 - **Server Engine**: Uvicorn ASGI Server
 - **Data Validation**: Pydantic v2
 - **Port**: `8000`
