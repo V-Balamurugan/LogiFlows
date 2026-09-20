@@ -1,0 +1,49 @@
+# Binaries & build outputs
+backend/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test & coverage artifacts
+*.out
+*.test
+coverage.html
+coverage.txt
+
+# Environment & local credentials (NEVER commit real credentials)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Go workspace & vendor
+go.work
+go.work.sum
+vendor/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker local data & volumes
+docker-data/
+postgres-data/
+redis-data/
+
+# Logs
+*.log
+logs/
