@@ -568,10 +568,33 @@ LogiFlows/
 ---
 
 ## 📜 Git & Branching Conventions
+
+### Branch Strategy
 - `main`: Production-ready release branch
 - `develop`: Integration branch for completed vertical slices
 - `feature/<name>`: Feature branch (e.g. `feature/phase-0-foundation`)
-- Commit style: [Conventional Commits](https://www.conventionalcommits.org/) (`feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`, `test(scope): ...`, `docs(scope): ...`)
+
+### Commit Message Standard
+All commit messages must strictly follow the professional **Phase & Component Scope** standard:
+
+```
+Phase <N> - <Particular Part>: <Imperative summary of changes>
+```
+
+#### Approved Phase 0 Examples:
+- `Phase 0 - Repository & Environment: Initialize directory structure and toolchain configuration`
+- `Phase 0 - Configuration: Implement typed environment loading and validation`
+- `Phase 0 - Backend Core: Implement Gin router, server skeleton, and uniform response envelopes`
+- `Phase 0 - Observability: Implement slog structured JSON logging and Request ID middleware`
+- `Phase 0 - Database & PostGIS: Configure PostgreSQL connection pool and PostGIS extension verification`
+- `Phase 0 - Migrations: Configure Goose migrations with extensions migration`
+- `Phase 0 - Cache: Implement Redis client, connection management, and ping check`
+- `Phase 0 - Health & Readiness: Implement liveness and readiness probe endpoints`
+- `Phase 0 - Infrastructure: Configure Docker Compose for PostgreSQL/PostGIS and Redis`
+- `Phase 0 - Testing: Add unit tests and live Docker integration tests`
+- `Phase 0 - CI & DevOps: Configure GitHub Actions CI workflow and Makefile`
+- `Phase 0 - Documentation: Add architecture diagram, ADR-001, API standards, and execution journal`
+- `Phase 0 - Onboarding: Provide complete download, run, and troubleshooting guide in README`
 
 ---
 

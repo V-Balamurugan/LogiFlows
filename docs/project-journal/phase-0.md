@@ -111,3 +111,8 @@
 - **Timestamp**: 2026-09-20 20:44 IST
 - **Action**: Executed `gofmt -l .`, `go vet ./...`, `go build`, and configured `.github/workflows/ci.yml`.
 - **Outcome**: Zero lint warnings, zero formatting defects, static compilation verified.
+
+### Entry 013: Git Commit Message Standardization
+- **Timestamp**: 2026-09-20 20:55 IST
+- **Action**: Formalized and documented the standardized Git commit messaging convention for all project changes: `Phase <N> - <Particular Part>: <Imperative summary of changes>`.
+- **Outcome**: Documented in `README.md` and enshrined as the project-wide commit guideline for Phase 0 and subsequent phases.
