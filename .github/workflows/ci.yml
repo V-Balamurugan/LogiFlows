@@ -1,0 +1,45 @@
+name: LogiFlows CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, "feature/**" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-checks:
+    name: Backend Lint, Test & Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify Go Formatting
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files require gofmt formatting:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Run Go Vet
+        run: go vet ./...
+
+      - name: Run Backend Unit Tests (with Race Detector)
+        run: go test -v -race ./internal/...
+
+      - name: Build API Binary
+        run: go build -v -ldflags="-w -s" -o bin/api ./cmd/api
