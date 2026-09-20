@@ -1,12 +1,34 @@
-# LogiFlows Frontend
+# LogiFlows Web Operations Center
 
-## Status: Reserved for Future Phase
+> High-performance logistics operations dashboard for live system monitoring, fleet observability, and predictive intelligence.
 
-The web frontend for LogiFlows will be implemented in subsequent phases using:
-- **Framework**: React 18+ with Vite
+---
+
+## Technology Stack
+- **Framework**: React 18 / Vite
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **State Management & Querying**: TanStack Query (React Query)
-- **Component Architecture**: Modular component library with accessible UI primitives
+- **Styling**: Vanilla CSS Design System with Glassmorphism & Cyber-Logistics Dark Theme
+- **Port**: `5173`
 
-Per Phase 0 requirements, the web frontend is intentionally deferred until backend foundational infrastructure and vertical slice specifications are completed.
+---
+
+## Features
+- **Live Infrastructure Probing**: Real-time polling of Go Backend (`:8080`), PostgreSQL + PostGIS, and Redis cache.
+- **AI Microservice Integration**: Probing Python FastAPI service (`:8000`) and live delay risk prediction inference.
+- **Network Telemetry Log**: Terminal-style telemetry log recording live probe requests and latencies.
+
+---
+
+## Running Locally
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Start Vite development server
+npm run dev
+
+# 3. Build production bundle
+npm run build
+```
+The application will launch on **http://localhost:5173**.

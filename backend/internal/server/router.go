@@ -20,6 +20,7 @@ func SetupRouter(cfg *config.Config, log *slog.Logger, healthHandler *health.Han
 	r := gin.New()
 
 	// Global Middlewares
+	r.Use(middleware.CORS())
 	r.Use(middleware.RequestID(cfg.App.RequestIDHeader))
 	r.Use(middleware.StructuredLogger(log))
 	r.Use(middleware.Recovery(log))
