@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/logiflows/logiflows/backend/internal/middleware"
 )
 
 const (
@@ -47,7 +46,10 @@ func Success(c *gin.Context, statusCode int, data any) {
 
 // Error writes a structured error response with request correlation.
 func Error(c *gin.Context, statusCode int, code, message string, details any) {
-	reqID := middleware.GetRequestID(c)
+	reqID := c.GetString("request_id")
+	if reqID == "" {
+		reqID = c.GetHeader("X-Request-ID")
+	}
 
 	c.AbortWithStatusJSON(statusCode, ErrorEnvelope{
 		Error: ErrorBody{
@@ -64,9 +66,33 @@ func BadRequest(c *gin.Context, message string, details any) {
 	Error(c, 400, "BAD_REQUEST", message, details)
 }
 
+// Unauthorized helper.
+func Unauthorized(c *gin.Context, message string) {
+	if message == "" {
+		message = "Authentication credentials are required or invalid"
+	}
+	Error(c, 401, "UNAUTHORIZED", message, nil)
+}
+
+// Forbidden helper.
+func Forbidden(c *gin.Context, code, message string) {
+	if code == "" {
+		code = "FORBIDDEN"
+	}
+	if message == "" {
+		message = "You do not have permission to access this resource"
+	}
+	Error(c, 403, code, message, nil)
+}
+
 // NotFound helper.
 func NotFound(c *gin.Context, message string) {
 	Error(c, 404, "NOT_FOUND", message, nil)
+}
+
+// Conflict helper.
+func Conflict(c *gin.Context, message string) {
+	Error(c, 409, "CONFLICT", message, nil)
 }
 
 // InternalServerError helper.
