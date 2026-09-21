@@ -130,6 +130,11 @@ func TestConfig_DSN_And_RedisAddr(t *testing.T) {
 			Host: "127.0.0.1",
 			Port: 6379,
 		},
+		JWT: config.JWTConfig{
+			Secret:       "super-secret-logiflows-dev-jwt-key-min32chars!",
+			AccessExpiry: 24 * time.Hour,
+			Issuer:       "logiflows-api",
+		},
 	}
 
 	expectedDSN := "postgres://test_user:test_pass@127.0.0.1:5432/test_db?sslmode=disable"
@@ -140,5 +145,69 @@ func TestConfig_DSN_And_RedisAddr(t *testing.T) {
 	expectedRedisAddr := "127.0.0.1:6379"
 	if cfg.Redis.Addr() != expectedRedisAddr {
 		t.Errorf("expected Redis Addr %s, got %s", expectedRedisAddr, cfg.Redis.Addr())
+	}
+}
+
+func TestConfig_Validate_JWTSecretTooShort(t *testing.T) {
+	cfg := &config.Config{
+		App: config.AppConfig{
+			Env:      "development",
+			Port:     8080,
+			LogLevel: "info",
+		},
+		Database: config.DatabaseConfig{
+			Host:         "localhost",
+			Port:         5432,
+			User:         "postgres",
+			Name:         "logiflows_dev",
+			MaxOpenConns: 10,
+			MaxIdleConns: 5,
+		},
+		Redis: config.RedisConfig{
+			Host: "localhost",
+			Port: 6379,
+		},
+		JWT: config.JWTConfig{
+			Secret:       "too-short", // Less than 32 chars
+			AccessExpiry: 1 * time.Hour,
+			Issuer:       "logiflows-api",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatalf("expected error when JWT secret is less than 32 characters, got nil")
+	}
+}
+
+func TestConfig_Validate_JWTInvalidExpiry(t *testing.T) {
+	cfg := &config.Config{
+		App: config.AppConfig{
+			Env:      "development",
+			Port:     8080,
+			LogLevel: "info",
+		},
+		Database: config.DatabaseConfig{
+			Host:         "localhost",
+			Port:         5432,
+			User:         "postgres",
+			Name:         "logiflows_dev",
+			MaxOpenConns: 10,
+			MaxIdleConns: 5,
+		},
+		Redis: config.RedisConfig{
+			Host: "localhost",
+			Port: 6379,
+		},
+		JWT: config.JWTConfig{
+			Secret:       "super-secret-logiflows-dev-jwt-key-min32chars!",
+			AccessExpiry: 0, // Invalid expiry
+			Issuer:       "logiflows-api",
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatalf("expected error when JWT AccessExpiry <= 0, got nil")
 	}
 }

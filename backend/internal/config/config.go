@@ -15,6 +15,7 @@ type Config struct {
 	App      AppConfig
 	Database DatabaseConfig
 	Redis    RedisConfig
+	JWT      JWTConfig
 }
 
 // AppConfig holds general application and HTTP server settings.
@@ -46,6 +47,13 @@ type RedisConfig struct {
 	Port     int
 	Password string
 	DB       int
+}
+
+// JWTConfig holds JWT signing and expiration settings.
+type JWTConfig struct {
+	Secret       string
+	AccessExpiry time.Duration
+	Issuer       string
 }
 
 // DSN returns the formatted PostgreSQL connection string.
@@ -96,6 +104,11 @@ func Load() (*Config, error) {
 			Port:     getEnvAsInt("REDIS_PORT", 6379),
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvAsInt("REDIS_DB", 0),
+		},
+		JWT: JWTConfig{
+			Secret:       getEnv("JWT_SECRET", "super-secret-logiflows-dev-jwt-key-min32chars!"),
+			AccessExpiry: getEnvAsDuration("JWT_ACCESS_EXPIRY", 24*time.Hour),
+			Issuer:       getEnv("JWT_ISSUER", "logiflows-api"),
 		},
 	}
 
@@ -167,6 +180,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Redis.DB < 0 {
 		return fmt.Errorf("REDIS_DB cannot be negative")
+	}
+
+	// Validate JWT Config
+	if len(strings.TrimSpace(c.JWT.Secret)) < 32 {
+		return fmt.Errorf("JWT_SECRET must be at least 32 characters long for security")
+	}
+	if c.JWT.AccessExpiry <= 0 {
+		return fmt.Errorf("JWT_ACCESS_EXPIRY must be greater than zero")
 	}
 
 	return nil
