@@ -47,7 +47,7 @@ func Success(c *gin.Context, statusCode int, data any) {
 // Error writes a structured error response with request correlation.
 func Error(c *gin.Context, statusCode int, code, message string, details any) {
 	reqID := c.GetString("request_id")
-	if reqID == "" {
+	if reqID == "" && c.Request != nil {
 		reqID = c.GetHeader("X-Request-ID")
 	}
 
