@@ -39,7 +39,7 @@ class BranchModel {
       tenantId: json['tenant_id'] as String,
       branchCode: json['branch_code'] as String,
       name: json['name'] as String,
-      address: json['address'] as String,
+      address: json['address'] as String? ?? json['address_line1'] as String? ?? '',
       city: json['city'] as String,
       state: json['state'] as String?,
       postalCode: json['postal_code'] as String?,
@@ -111,14 +111,19 @@ class EmployeeModel {
   String get role => operationalRole;
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) {
+    final rawFullName = json['full_name'] as String? ?? '';
+    final nameParts = rawFullName.trim().split(RegExp(r'\s+'));
+    final parsedFirst = json['first_name'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '');
+    final parsedLast = json['last_name'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '');
+
     return EmployeeModel(
       id: json['id'] as String,
       tenantId: json['tenant_id'] as String,
       branchId: json['branch_id'] as String?,
       branchName: json['branch_name'] as String?,
       employeeCode: json['employee_code'] as String,
-      firstName: json['first_name'] as String,
-      lastName: json['last_name'] as String,
+      firstName: parsedFirst,
+      lastName: parsedLast,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       designation: json['designation'] as String? ?? 'Staff',
