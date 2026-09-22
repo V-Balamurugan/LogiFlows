@@ -167,3 +167,36 @@ func (h *Handler) Update(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, tenant)
 }
+
+// GetCurrent handles GET /api/v1/tenants/current (and /api/v1/companies/current).
+func (h *Handler) GetCurrent(c *gin.Context) {
+	userID, ok := contextutil.GetUserID(c)
+	if !ok {
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	// 1. If an active tenant ID is specified in the request context or header, try that first
+	if tenantID, ok := contextutil.GetTenantID(c); ok {
+		tenant, err := h.service.GetTenant(c.Request.Context(), tenantID)
+		if err == nil && tenant != nil {
+			response.Success(c, http.StatusOK, tenant)
+			return
+		}
+	}
+
+	// 2. Otherwise return the user's primary/first tenant membership
+	isPlatformAdmin := contextutil.IsPlatformAdmin(c)
+	userTenants, err := h.service.ListUserTenants(c.Request.Context(), userID, isPlatformAdmin)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve current company details")
+		return
+	}
+
+	if len(userTenants) == 0 {
+		response.NotFound(c, "No company associated with current user")
+		return
+	}
+
+	response.Success(c, http.StatusOK, userTenants[0])
+}

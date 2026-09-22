@@ -10,8 +10,10 @@ import (
 
 	"github.com/logiflows/logiflows/backend/internal/audit"
 	"github.com/logiflows/logiflows/backend/internal/auth"
+	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
 	"github.com/logiflows/logiflows/backend/internal/memberships"
@@ -20,6 +22,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/server"
 	"github.com/logiflows/logiflows/backend/internal/tenants"
 	"github.com/logiflows/logiflows/backend/internal/users"
+	"github.com/logiflows/logiflows/backend/internal/vehicles"
 	"github.com/logiflows/logiflows/backend/migrations"
 )
 
@@ -103,6 +106,18 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 	tenantHandler := tenants.NewHandler(tenantService)
 
+	branchRepo := branches.NewRepository(db.Pool())
+	branchService := branches.NewService(branchRepo, auditRepo)
+	branchHandler := branches.NewHandler(branchService)
+
+	employeeRepo := employees.NewRepository(db.Pool())
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo)
+	employeeHandler := employees.NewHandler(employeeService)
+
+	vehicleRepo := vehicles.NewRepository(db.Pool())
+	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
+	vehicleHandler := vehicles.NewHandler(vehicleService)
+
 	authMiddleware := middleware.Auth(tokenService, userRepo)
 	tenantMiddleware := middleware.TenantContext(membershipRepo, tenantRepo)
 
@@ -112,6 +127,9 @@ func main() {
 		HealthHandler:    healthHandler,
 		AuthHandler:      authHandler,
 		TenantHandler:    tenantHandler,
+		BranchHandler:    branchHandler,
+		EmployeeHandler:  employeeHandler,
+		VehicleHandler:   vehicleHandler,
 		AuthMiddleware:   authMiddleware,
 		TenantMiddleware: tenantMiddleware,
 	})
