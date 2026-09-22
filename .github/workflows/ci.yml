@@ -16,12 +16,12 @@ jobs:
         image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: postgres_dev_password
           POSTGRES_DB: logiflows_dev
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d logiflows_dev"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -43,11 +43,18 @@ jobs:
     env:
       APP_ENV: test
       APP_PORT: 8080
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres_dev_password
+      DATABASE_NAME: logiflows_dev
+      DATABASE_SSLMODE: disable
       DB_HOST: localhost
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: postgres_dev_password
       DB_NAME: logiflows_dev
+      DB_SSLMODE: disable
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       JWT_SECRET: super-secret-logiflows-test-jwt-key-256-bit-minimum!

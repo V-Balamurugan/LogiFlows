@@ -32,6 +32,37 @@ func TestConfig_Load_Default(t *testing.T) {
 	}
 }
 
+func TestConfig_Load_DBAliases(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("APP_ENV", "test")
+	_ = os.Setenv("DB_HOST", "db-host-alias")
+	_ = os.Setenv("DB_PORT", "5433")
+	_ = os.Setenv("DB_USER", "alias_user")
+	_ = os.Setenv("DB_PASSWORD", "alias_password")
+	_ = os.Setenv("DB_NAME", "alias_db")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("expected config to load with DB_* aliases, got error: %v", err)
+	}
+
+	if cfg.Database.Host != "db-host-alias" {
+		t.Errorf("expected Database.Host to be 'db-host-alias', got %s", cfg.Database.Host)
+	}
+	if cfg.Database.Port != 5433 {
+		t.Errorf("expected Database.Port to be 5433, got %d", cfg.Database.Port)
+	}
+	if cfg.Database.User != "alias_user" {
+		t.Errorf("expected Database.User to be 'alias_user', got %s", cfg.Database.User)
+	}
+	if cfg.Database.Password != "alias_password" {
+		t.Errorf("expected Database.Password to be 'alias_password', got %s", cfg.Database.Password)
+	}
+	if cfg.Database.Name != "alias_db" {
+		t.Errorf("expected Database.Name to be 'alias_db', got %s", cfg.Database.Name)
+	}
+}
+
 func TestConfig_Validate_InvalidEnv(t *testing.T) {
 	cfg := &config.Config{
 		App: config.AppConfig{
