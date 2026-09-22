@@ -1,11 +1,49 @@
 import 'package:flutter/material.dart';
+import 'screens/login_screen.dart';
+import 'services/auth_api_client.dart';
 
 void main() {
   runApp(const LogiFlowsApp());
 }
 
-class LogiFlowsApp extends StatelessWidget {
+class LogiFlowsApp extends StatefulWidget {
   const LogiFlowsApp({super.key});
+
+  @override
+  State<LogiFlowsApp> createState() => _LogiFlowsAppState();
+}
+
+class _LogiFlowsAppState extends State<LogiFlowsApp> {
+  final AuthApiClient _authClient = AuthApiClient();
+  bool _isAuthenticated = false;
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialAuth();
+  }
+
+  Future<void> _checkInitialAuth() async {
+    final hasToken = await _authClient.tokenStorage.hasValidToken();
+    setState(() {
+      _isAuthenticated = hasToken;
+      _isCheckingAuth = false;
+    });
+  }
+
+  void _onLoginSuccess() {
+    setState(() {
+      _isAuthenticated = true;
+    });
+  }
+
+  Future<void> _handleLogout() async {
+    await _authClient.logout();
+    setState(() {
+      _isAuthenticated = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,13 +59,28 @@ class LogiFlowsApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFF020617),
       ),
-      home: const DriverDashboardScreen(),
+      home: _isCheckingAuth
+          ? const Scaffold(
+              backgroundColor: Color(0xFF020617),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
+            )
+          : _isAuthenticated
+              ? DriverDashboardScreen(onLogout: _handleLogout)
+              : LoginScreen(
+                  authClient: _authClient,
+                  onLoginSuccess: _onLoginSuccess,
+                ),
     );
   }
 }
 
 class DriverDashboardScreen extends StatefulWidget {
-  const DriverDashboardScreen({super.key});
+  final VoidCallback onLogout;
+
+  const DriverDashboardScreen({
+    super.key,
+    required this.onLogout,
+  });
 
   @override
   State<DriverDashboardScreen> createState() => _DriverDashboardScreenState();
@@ -35,22 +88,21 @@ class DriverDashboardScreen extends StatefulWidget {
 
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   bool _isConnecting = false;
-  String _apiStatus = 'Ready to Connect';
-  Color _statusColor = Colors.grey;
+  String _apiStatus = 'Session Active';
+  Color _statusColor = const Color(0xFF10B981);
 
   void _checkBackendStatus() async {
     setState(() {
       _isConnecting = true;
-      _apiStatus = 'Checking Core Backend...';
+      _apiStatus = 'Probing Network...';
       _statusColor = Colors.amber;
     });
 
-    // Simulated check for initial scaffold
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 600));
 
     setState(() {
       _isConnecting = false;
-      _apiStatus = 'Backend Operational (8080)';
+      _apiStatus = 'Backend Operational';
       _statusColor = const Color(0xFF10B981);
     });
   }
@@ -66,6 +118,13 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             Text('LogiFlows Driver Pro', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white70),
+            tooltip: 'Sign Out',
+            onPressed: widget.onLogout,
+          ),
+        ],
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
       ),

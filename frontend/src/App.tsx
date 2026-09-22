@@ -9,6 +9,9 @@ import {
   Sparkles,
   Terminal
 } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthScreen } from './components/auth/AuthScreen';
+import { TopNav } from './components/auth/TopNav';
 
 interface BackendReadiness {
   status: string;
@@ -46,7 +49,7 @@ interface TelemetryLog {
   message: string;
 }
 
-export default function App() {
+function Dashboard() {
   const [backendData, setBackendData] = useState<BackendReadiness | null>(null);
   const [aiData, setAiData] = useState<AIReadiness | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
@@ -740,6 +743,40 @@ export default function App() {
 
       </div>
 
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainLayout />
+    </AuthProvider>
+  );
+}
+
+function MainLayout() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <Boxes size={36} color="#06b6d4" className="spin-slow" style={{ margin: '0 auto 1rem' }} />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Verifying LogiFlows credentials...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return (
+    <div>
+      <TopNav />
+      <Dashboard />
     </div>
   );
 }

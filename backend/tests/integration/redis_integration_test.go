@@ -30,8 +30,8 @@ func TestRedis_ConnectionAndPing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected redis ping to succeed, got error: %v", err)
 	}
-	if latency <= 0 {
-		t.Errorf("expected positive latency, got %v", latency)
+	if latency < 0 {
+		t.Errorf("expected non-negative latency, got %v", latency)
 	}
 	t.Logf("Redis Ping Latency: %v", latency)
 

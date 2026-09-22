@@ -15,6 +15,7 @@ type Config struct {
 	App      AppConfig
 	Database DatabaseConfig
 	Redis    RedisConfig
+	JWT      JWTConfig
 }
 
 // AppConfig holds general application and HTTP server settings.
@@ -46,6 +47,13 @@ type RedisConfig struct {
 	Port     int
 	Password string
 	DB       int
+}
+
+// JWTConfig holds JWT signing and expiration settings.
+type JWTConfig struct {
+	Secret       string
+	AccessExpiry time.Duration
+	Issuer       string
 }
 
 // DSN returns the formatted PostgreSQL connection string.
@@ -81,21 +89,26 @@ func Load() (*Config, error) {
 			RequestIDHeader: getEnv("REQUEST_ID_HEADER", "X-Request-ID"),
 		},
 		Database: DatabaseConfig{
-			Host:            getEnv("DATABASE_HOST", "localhost"),
-			Port:            getEnvAsInt("DATABASE_PORT", 5432),
-			User:            getEnv("DATABASE_USER", "postgres"),
-			Password:        getEnv("DATABASE_PASSWORD", "postgres_dev_password"),
-			Name:            getEnv("DATABASE_NAME", "logiflows_dev"),
-			SSLMode:         getEnv("DATABASE_SSLMODE", "disable"),
-			MaxOpenConns:    getEnvAsInt("DATABASE_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getEnvAsInt("DATABASE_MAX_IDLE_CONNS", 5),
+			Host:            getEnvAny("localhost", "DATABASE_HOST", "DB_HOST"),
+			Port:            getEnvAnyAsInt(5432, "DATABASE_PORT", "DB_PORT"),
+			User:            getEnvAny("postgres", "DATABASE_USER", "DB_USER"),
+			Password:        getEnvAny("postgres_dev_password", "DATABASE_PASSWORD", "DB_PASSWORD"),
+			Name:            getEnvAny("logiflows_dev", "DATABASE_NAME", "DB_NAME"),
+			SSLMode:         getEnvAny("disable", "DATABASE_SSLMODE", "DB_SSLMODE"),
+			MaxOpenConns:    getEnvAnyAsInt(25, "DATABASE_MAX_OPEN_CONNS", "DB_MAX_OPEN_CONNS"),
+			MaxIdleConns:    getEnvAnyAsInt(5, "DATABASE_MAX_IDLE_CONNS", "DB_MAX_IDLE_CONNS"),
 			ConnMaxLifetime: getEnvAsDuration("DATABASE_CONN_MAX_LIFETIME", 15*time.Minute),
 		},
 		Redis: RedisConfig{
-			Host:     getEnv("REDIS_HOST", "localhost"),
-			Port:     getEnvAsInt("REDIS_PORT", 6379),
-			Password: getEnv("REDIS_PASSWORD", ""),
-			DB:       getEnvAsInt("REDIS_DB", 0),
+			Host:     getEnvAny("localhost", "REDIS_HOST"),
+			Port:     getEnvAnyAsInt(6379, "REDIS_PORT"),
+			Password: getEnvAny("", "REDIS_PASSWORD"),
+			DB:       getEnvAnyAsInt(0, "REDIS_DB"),
+		},
+		JWT: JWTConfig{
+			Secret:       getEnv("JWT_SECRET", "super-secret-logiflows-dev-jwt-key-min32chars!"),
+			AccessExpiry: getEnvAsDuration("JWT_ACCESS_EXPIRY", 24*time.Hour),
+			Issuer:       getEnv("JWT_ISSUER", "logiflows-api"),
 		},
 	}
 
@@ -169,6 +182,14 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("REDIS_DB cannot be negative")
 	}
 
+	// Validate JWT Config
+	if len(strings.TrimSpace(c.JWT.Secret)) < 32 {
+		return fmt.Errorf("JWT_SECRET must be at least 32 characters long for security")
+	}
+	if c.JWT.AccessExpiry <= 0 {
+		return fmt.Errorf("JWT_ACCESS_EXPIRY must be greater than zero")
+	}
+
 	return nil
 }
 
@@ -193,6 +214,26 @@ func getEnvAsDuration(key string, defaultVal time.Duration) time.Duration {
 	if valStr, ok := os.LookupEnv(key); ok {
 		if val, err := time.ParseDuration(strings.TrimSpace(valStr)); err == nil {
 			return val
+		}
+	}
+	return defaultVal
+}
+
+func getEnvAny(defaultVal string, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := os.LookupEnv(key); ok && strings.TrimSpace(val) != "" {
+			return strings.TrimSpace(val)
+		}
+	}
+	return defaultVal
+}
+
+func getEnvAnyAsInt(defaultVal int, keys ...string) int {
+	for _, key := range keys {
+		if valStr, ok := os.LookupEnv(key); ok && strings.TrimSpace(valStr) != "" {
+			if val, err := strconv.Atoi(strings.TrimSpace(valStr)); err == nil {
+				return val
+			}
 		}
 	}
 	return defaultVal
