@@ -108,6 +108,7 @@ class EmployeeModel {
   });
 
   String get fullName => '$firstName $lastName'.trim();
+  String get role => operationalRole;
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) {
     return EmployeeModel(
@@ -121,7 +122,7 @@ class EmployeeModel {
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       designation: json['designation'] as String? ?? 'Staff',
-      operationalRole: json['operational_role'] as String? ?? 'OPERATOR',
+      operationalRole: json['operational_role'] as String? ?? json['role'] as String? ?? 'OPERATOR',
       licenseNumber: json['license_number'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',
       isActive: json['is_active'] as bool? ?? true,

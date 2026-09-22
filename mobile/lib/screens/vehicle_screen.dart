@@ -90,9 +90,9 @@ class _VehicleScreenState extends State<VehicleScreen> {
                       children: [
                         const Icon(Icons.error_outline, color: Color(0xFFF43F5E), size: 48),
                         const SizedBox(height: 16),
-                        Text(
+                        const Text(
                           'Unable to load vehicles',
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -111,13 +111,13 @@ class _VehicleScreenState extends State<VehicleScreen> {
                   ),
                 )
               : _vehicles.isEmpty
-                  ? Center(
+                  ? const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.local_shipping, color: Colors.white30, size: 56),
-                          const SizedBox(height: 16),
-                          const Text(
+                          Icon(Icons.local_shipping, color: Colors.white30, size: 56),
+                          SizedBox(height: 16),
+                          Text(
                             'No vehicles registered yet',
                             style: TextStyle(color: Colors.white70, fontSize: 16),
                           ),
