@@ -15,8 +15,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/logiflows/logiflows/backend/internal/audit"
 	"github.com/logiflows/logiflows/backend/internal/auth"
+	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
 	"github.com/logiflows/logiflows/backend/internal/memberships"
@@ -25,6 +27,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/server"
 	"github.com/logiflows/logiflows/backend/internal/tenants"
 	"github.com/logiflows/logiflows/backend/internal/users"
+	"github.com/logiflows/logiflows/backend/internal/vehicles"
 )
 
 func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
@@ -36,6 +39,9 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
+	cfg.Database.MaxOpenConns = 5
+	cfg.Database.MaxIdleConns = 1
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -43,6 +49,9 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	if err != nil {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	log := logger.Init("test", "debug")
 	userRepo := users.NewRepository(db.Pool())
@@ -54,6 +63,18 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
 	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
 	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
+
+	branchRepo := branches.NewRepository(db.Pool())
+	branchService := branches.NewService(branchRepo, auditRepo)
+	branchHandler := branches.NewHandler(branchService)
+
+	employeeRepo := employees.NewRepository(db.Pool())
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo)
+	employeeHandler := employees.NewHandler(employeeService)
+
+	vehicleRepo := vehicles.NewRepository(db.Pool())
+	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
+	vehicleHandler := vehicles.NewHandler(vehicleService)
 
 	authHandler := auth.NewHandler(authService)
 	tenantHandler := tenants.NewHandler(tenantService)
@@ -68,6 +89,9 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 		HealthHandler:    healthHandler,
 		AuthHandler:      authHandler,
 		TenantHandler:    tenantHandler,
+		BranchHandler:    branchHandler,
+		EmployeeHandler:  employeeHandler,
+		VehicleHandler:   vehicleHandler,
 		AuthMiddleware:   authMiddleware,
 		TenantMiddleware: tenantMiddleware,
 	})

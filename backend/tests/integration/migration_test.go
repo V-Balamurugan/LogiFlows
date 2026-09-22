@@ -85,7 +85,7 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 
 	log := logger.Init("test", "debug")
 
-	// 1. Rollback migration 00003
+	// 1. Rollback latest migration (00005_create_employees)
 	defer func() {
 		_ = migrations.RunUp(context.Background(), cfg.Database.DSN(), log)
 	}()
@@ -100,29 +100,29 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Verify refresh_tokens is dropped
-	var refreshTokensExists bool
+	// Verify vehicles table is dropped after rollback of latest migration
+	var vehiclesExists bool
 	query := `SELECT EXISTS (
 		SELECT FROM information_schema.tables 
-		WHERE table_schema = 'public' AND table_name = 'refresh_tokens'
+		WHERE table_schema = 'public' AND table_name = 'vehicles'
 	)`
-	if err := conn.QueryRow(ctx, query).Scan(&refreshTokensExists); err != nil {
-		t.Fatalf("failed to check refresh_tokens existence: %v", err)
+	if err := conn.QueryRow(ctx, query).Scan(&vehiclesExists); err != nil {
+		t.Fatalf("failed to check vehicles existence: %v", err)
 	}
-	if refreshTokensExists {
-		t.Errorf("expected refresh_tokens table to be dropped after rollback")
+	if vehiclesExists {
+		t.Errorf("expected vehicles table to be dropped after rollback")
 	}
 
-	// 2. Re-apply migration 00003
+	// 2. Re-apply migration 00006
 	if err := migrations.RunUp(ctx, cfg.Database.DSN(), log); err != nil {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Verify refresh_tokens is recreated
-	if err := conn.QueryRow(ctx, query).Scan(&refreshTokensExists); err != nil {
-		t.Fatalf("failed to check refresh_tokens re-creation: %v", err)
+	// Verify vehicles table is recreated
+	if err := conn.QueryRow(ctx, query).Scan(&vehiclesExists); err != nil {
+		t.Fatalf("failed to check vehicles re-creation: %v", err)
 	}
-	if !refreshTokensExists {
-		t.Errorf("expected refresh_tokens table to exist after re-applying migration")
+	if !vehiclesExists {
+		t.Errorf("expected vehicles table to exist after re-applying migration")
 	}
 }

@@ -15,8 +15,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/logiflows/logiflows/backend/internal/audit"
 	"github.com/logiflows/logiflows/backend/internal/auth"
+	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
 	"github.com/logiflows/logiflows/backend/internal/memberships"
@@ -26,6 +28,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/server"
 	"github.com/logiflows/logiflows/backend/internal/tenants"
 	"github.com/logiflows/logiflows/backend/internal/users"
+	"github.com/logiflows/logiflows/backend/internal/vehicles"
 )
 
 func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
@@ -36,6 +39,8 @@ func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	if err != nil {
 		t.Fatalf("regression setup: failed to load config: %v", err)
 	}
+	cfg.Database.MaxOpenConns = 5
+	cfg.Database.MaxIdleConns = 1
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -44,6 +49,9 @@ func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	if err != nil {
 		t.Fatalf("regression setup: failed to connect to database: %v", err)
 	}
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	rdb, err := redis.New(ctx, &cfg.Redis)
 	if err != nil {
@@ -56,13 +64,22 @@ func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	membershipRepo := memberships.NewRepository(db.Pool())
 	auditRepo := audit.NewRepository(db.Pool())
 	tokenRepo := auth.NewRefreshTokenRepository(db.Pool())
+	branchRepo := branches.NewRepository(db.Pool())
+	employeeRepo := employees.NewRepository(db.Pool())
+	vehicleRepo := vehicles.NewRepository(db.Pool())
 
 	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
 	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
 	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
+	branchService := branches.NewService(branchRepo, auditRepo)
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo)
+	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
 
 	authHandler := auth.NewHandler(authService)
 	tenantHandler := tenants.NewHandler(tenantService)
+	branchHandler := branches.NewHandler(branchService)
+	employeeHandler := employees.NewHandler(employeeService)
+	vehicleHandler := vehicles.NewHandler(vehicleService)
 	healthHandler := health.NewHandler(db, rdb)
 
 	authMiddleware := middleware.Auth(tokenService, userRepo)
@@ -74,6 +91,9 @@ func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 		HealthHandler:    healthHandler,
 		AuthHandler:      authHandler,
 		TenantHandler:    tenantHandler,
+		BranchHandler:    branchHandler,
+		EmployeeHandler:  employeeHandler,
+		VehicleHandler:   vehicleHandler,
 		AuthMiddleware:   authMiddleware,
 		TenantMiddleware: tenantMiddleware,
 	})
