@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/logiflows/logiflows/backend/internal/contextutil"
 	"github.com/logiflows/logiflows/backend/internal/response"
 )
@@ -96,9 +97,54 @@ func (h *Handler) Me(c *gin.Context) {
 	response.Success(c, http.StatusOK, res)
 }
 
+// Refresh handles POST /api/v1/auth/refresh.
+func (h *Handler) Refresh(c *gin.Context) {
+	var req RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid token refresh payload", err.Error())
+		return
+	}
+
+	ip := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	res, err := h.service.RefreshToken(c.Request.Context(), req, ip, userAgent)
+	if err != nil {
+		if errors.Is(err, ErrInvalidToken) || errors.Is(err, ErrRefreshTokenExpired) {
+			response.Unauthorized(c, "Invalid or expired refresh token")
+			return
+		}
+		if errors.Is(err, ErrRefreshTokenRevoked) {
+			response.Unauthorized(c, "Refresh token has been revoked. Re-authentication required.")
+			return
+		}
+		if errors.Is(err, ErrAccountDeactivated) {
+			response.Forbidden(c, "ACCOUNT_DEACTIVATED", "Your account has been deactivated")
+			return
+		}
+		response.InternalServerError(c, "Failed to refresh authentication token")
+		return
+	}
+
+	response.Success(c, http.StatusOK, res)
+}
+
 // Logout handles POST /api/v1/auth/logout.
 func (h *Handler) Logout(c *gin.Context) {
+	var req LogoutRequest
+	_ = c.ShouldBindJSON(&req)
+
+	var uidPtr *uuid.UUID
+	if uid, ok := contextutil.GetUserID(c); ok {
+		uidPtr = &uid
+	}
+
+	ip := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	_ = h.service.Logout(c.Request.Context(), req, uidPtr, ip, userAgent)
+
 	response.Success(c, http.StatusOK, gin.H{
-		"message": "Successfully logged out. Please discard client credentials.",
+		"message": "Successfully logged out. Refresh token and session revoked.",
 	})
 }

@@ -64,6 +64,7 @@ func SetupRouter(params RouterParams) *gin.Engine {
 			{
 				authRoutes.POST("/register", params.AuthHandler.Register)
 				authRoutes.POST("/login", params.AuthHandler.Login)
+				authRoutes.POST("/refresh", params.AuthHandler.Refresh)
 			}
 		}
 
@@ -88,6 +89,7 @@ func SetupRouter(params RouterParams) *gin.Engine {
 						tenantScoped.Use(params.TenantMiddleware)
 						{
 							tenantScoped.GET("", params.TenantHandler.Get)
+							tenantScoped.PATCH("", middleware.RequireRole(memberships.RoleTenantAdmin), params.TenantHandler.Update)
 							tenantScoped.GET("/members", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.TenantHandler.ListMembers)
 							tenantScoped.POST("/members", middleware.RequireRole(memberships.RoleTenantAdmin), params.TenantHandler.AddMember)
 						}

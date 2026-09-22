@@ -27,6 +27,7 @@ type Service interface {
 	ListUserTenants(ctx context.Context, userID uuid.UUID, isPlatformAdmin bool) ([]Tenant, error)
 	ListMembers(ctx context.Context, tenantID uuid.UUID) ([]memberships.MemberDetails, error)
 	AddMember(ctx context.Context, tenantID uuid.UUID, req AddMemberRequest) (*memberships.MemberDetails, error)
+	UpdateTenant(ctx context.Context, tenantID uuid.UUID, req UpdateTenantRequest) (*Tenant, error)
 }
 
 type tenantService struct {
@@ -178,6 +179,34 @@ func (s *tenantService) AddMember(ctx context.Context, tenantID uuid.UUID, req A
 		Status:    memberships.StatusActive,
 		CreatedAt: membership.CreatedAt,
 	}, nil
+}
+
+func (s *tenantService) UpdateTenant(ctx context.Context, tenantID uuid.UUID, req UpdateTenantRequest) (*Tenant, error) {
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
+		tenant.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.ContactEmail != nil && strings.TrimSpace(*req.ContactEmail) != "" {
+		tenant.ContactEmail = strings.ToLower(strings.TrimSpace(*req.ContactEmail))
+	}
+
+	if err := s.tenantRepo.Update(ctx, tenant); err != nil {
+		return nil, err
+	}
+
+	_ = s.auditRepo.Log(ctx, &audit.AuditLog{
+		TenantID:     &tenant.ID,
+		Action:       "TENANT_UPDATED",
+		ResourceType: "TENANT",
+		ResourceID:   &tenant.Slug,
+		Status:       audit.StatusSuccess,
+	})
+
+	return tenant, nil
 }
 
 func slugifyTenant(s string) string {

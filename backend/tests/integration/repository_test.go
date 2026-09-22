@@ -75,6 +75,21 @@ func TestRepositories_CRUD_And_Constraints(t *testing.T) {
 	if fetchedUser.ID != user.ID {
 		t.Errorf("expected user ID %v, got %v", user.ID, fetchedUser.ID)
 	}
+	if fetchedUser.EmailVerified {
+		t.Errorf("expected default EmailVerified to be false")
+	}
+
+	// Verify SetEmailVerified
+	if err := userRepo.SetEmailVerified(ctx, user.ID, true); err != nil {
+		t.Fatalf("failed to set email verified: %v", err)
+	}
+	verifiedUser, err := userRepo.GetByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("failed to fetch verified user: %v", err)
+	}
+	if !verifiedUser.EmailVerified {
+		t.Errorf("expected EmailVerified to be true after update")
+	}
 
 	// 3. Create Tenant
 	tenant := &tenants.Tenant{

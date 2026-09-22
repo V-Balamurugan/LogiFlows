@@ -11,3 +11,9 @@ type AddMemberRequest struct {
 	Email string `json:"email" binding:"required,email"`
 	Role  string `json:"role" binding:"required"`
 }
+
+// UpdateTenantRequest holds the input for updating tenant metadata.
+type UpdateTenantRequest struct {
+	Name         *string `json:"name"`
+	ContactEmail *string `json:"contact_email" binding:"omitempty,email"`
+}

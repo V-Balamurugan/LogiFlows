@@ -140,3 +140,30 @@ func (h *Handler) AddMember(c *gin.Context) {
 
 	response.Success(c, http.StatusCreated, member)
 }
+
+// Update handles PATCH /api/v1/tenants/:tenant_id.
+func (h *Handler) Update(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Valid tenant ID is required", nil)
+		return
+	}
+
+	var req UpdateTenantRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid tenant update payload", err.Error())
+		return
+	}
+
+	tenant, err := h.service.UpdateTenant(c.Request.Context(), tenantID, req)
+	if err != nil {
+		if errors.Is(err, ErrTenantNotFound) {
+			response.NotFound(c, "Tenant company not found")
+			return
+		}
+		response.InternalServerError(c, "Failed to update tenant company")
+		return
+	}
+
+	response.Success(c, http.StatusOK, tenant)
+}

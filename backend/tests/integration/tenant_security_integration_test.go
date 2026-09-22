@@ -225,3 +225,59 @@ func TestSecurity_InvalidTenantID_Rejected(t *testing.T) {
 		t.Errorf("expected 400 Bad Request for malformed UUID, got %d", wBadUUID.Code)
 	}
 }
+
+func TestSecurity_TenantUpdate_PATCH(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping tenant update security test in short mode")
+	}
+
+	router, _ := setupTestRouter(t)
+
+	// Register Company Gamma
+	tokenAdminGamma, _, tenantIDGamma := registerTestCompany(t, router, "Gamma", "admin_gamma")
+	// Register Company Delta
+	tokenAdminDelta, _, _ := registerTestCompany(t, router, "Delta", "admin_delta")
+
+	// 1. Valid update by Gamma Admin
+	newName := "Gamma Global Logistics"
+	newEmail := "ops@gammaglobal.com"
+	updatePayload := tenants.UpdateTenantRequest{
+		Name:         &newName,
+		ContactEmail: &newEmail,
+	}
+	upBody, _ := json.Marshal(updatePayload)
+
+	wValid := httptest.NewRecorder()
+	reqValid := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tenants/%s", tenantIDGamma), bytes.NewReader(upBody))
+	reqValid.Header.Set("Authorization", "Bearer "+tokenAdminGamma)
+	reqValid.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wValid, reqValid)
+
+	if wValid.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on tenant update, got %d: %s", wValid.Code, wValid.Body.String())
+	}
+
+	var updateEnv response.SuccessEnvelope
+	_ = json.Unmarshal(wValid.Body.Bytes(), &updateEnv)
+	upBytes, _ := json.Marshal(updateEnv.Data)
+	var updatedTenant tenants.Tenant
+	_ = json.Unmarshal(upBytes, &updatedTenant)
+
+	if updatedTenant.Name != newName {
+		t.Errorf("expected updated name %s, got %s", newName, updatedTenant.Name)
+	}
+	if updatedTenant.ContactEmail != newEmail {
+		t.Errorf("expected updated email %s, got %s", newEmail, updatedTenant.ContactEmail)
+	}
+
+	// 2. Cross-tenant update attempt: Delta Admin attempts to PATCH Gamma's tenant
+	wCross := httptest.NewRecorder()
+	reqCross := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tenants/%s", tenantIDGamma), bytes.NewReader(upBody))
+	reqCross.Header.Set("Authorization", "Bearer "+tokenAdminDelta)
+	reqCross.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wCross, reqCross)
+
+	if wCross.Code != http.StatusForbidden {
+		t.Errorf("SECURITY BREACH: Cross-tenant PATCH succeeded! Expected 403 Forbidden, got %d", wCross.Code)
+	}
+}

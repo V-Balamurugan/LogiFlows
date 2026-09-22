@@ -49,9 +49,10 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	tenantRepo := tenants.NewRepository(db.Pool())
 	membershipRepo := memberships.NewRepository(db.Pool())
 	auditRepo := audit.NewRepository(db.Pool())
+	tokenRepo := auth.NewRefreshTokenRepository(db.Pool())
 
 	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
-	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenService)
+	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
 	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
 
 	authHandler := auth.NewHandler(authService)
@@ -216,5 +217,169 @@ func TestAuthAPI_ExpiredToken_Rejected(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 Unauthorized for expired token, got %d", w.Code)
+	}
+}
+
+func TestAuthAPI_TokenRefresh_Rotation_And_BreachDetection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping token refresh integration test in short mode")
+	}
+
+	router, _ := setupTestRouter(t)
+
+	// 1. Register a new user and company
+	uniqueSuffix := time.Now().UnixNano()
+	email := fmt.Sprintf("refresh_tester_%d@example.com", uniqueSuffix)
+	password := "SecureP@ssw0rd!2026"
+	company := fmt.Sprintf("Refresh Logistics %d", uniqueSuffix)
+
+	regPayload := auth.RegisterRequest{
+		Email:       email,
+		Password:    password,
+		FullName:    "Refresh Tester",
+		CompanyName: company,
+	}
+	body, _ := json.Marshal(regPayload)
+
+	wReg := httptest.NewRecorder()
+	reqReg := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(body))
+	reqReg.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wReg, reqReg)
+
+	if wReg.Code != http.StatusCreated {
+		t.Fatalf("registration failed: %d %s", wReg.Code, wReg.Body.String())
+	}
+
+	var regEnv response.SuccessEnvelope
+	_ = json.Unmarshal(wReg.Body.Bytes(), &regEnv)
+	regBytes, _ := json.Marshal(regEnv.Data)
+	var regResp auth.AuthResponse
+	_ = json.Unmarshal(regBytes, &regResp)
+
+	if regResp.RefreshToken == "" {
+		t.Fatal("expected non-empty refresh token in registration response")
+	}
+
+	originalRefreshToken := regResp.RefreshToken
+
+	// 2. Perform valid token refresh
+	refreshPayload := auth.RefreshRequest{
+		RefreshToken: originalRefreshToken,
+	}
+	rBody, _ := json.Marshal(refreshPayload)
+
+	wRefresh := httptest.NewRecorder()
+	reqRefresh := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rBody))
+	reqRefresh.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wRefresh, reqRefresh)
+
+	if wRefresh.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on token refresh, got %d: %s", wRefresh.Code, wRefresh.Body.String())
+	}
+
+	var refreshEnv response.SuccessEnvelope
+	_ = json.Unmarshal(wRefresh.Body.Bytes(), &refreshEnv)
+	refBytes, _ := json.Marshal(refreshEnv.Data)
+	var rotatedResp auth.AuthResponse
+	_ = json.Unmarshal(refBytes, &rotatedResp)
+
+	if rotatedResp.Token == "" {
+		t.Error("expected non-empty new access token")
+	}
+	if rotatedResp.RefreshToken == "" {
+		t.Error("expected non-empty rotated refresh token")
+	}
+	if rotatedResp.RefreshToken == originalRefreshToken {
+		t.Error("expected rotated refresh token to differ from original (single-use rotation)")
+	}
+
+	// 3. Breach Detection: Attempting to reuse the revoked original refresh token
+	wReplay := httptest.NewRecorder()
+	reqReplay := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rBody))
+	reqReplay.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wReplay, reqReplay)
+
+	if wReplay.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for revoked token replay, got %d: %s", wReplay.Code, wReplay.Body.String())
+	}
+
+	// 4. Verify that breach detection revoked all tokens for the user,
+	// so the newer rotated token should now also be rejected
+	rotatedPayload := auth.RefreshRequest{
+		RefreshToken: rotatedResp.RefreshToken,
+	}
+	rotBody, _ := json.Marshal(rotatedPayload)
+
+	wRotatedReplay := httptest.NewRecorder()
+	reqRotatedReplay := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rotBody))
+	reqRotatedReplay.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wRotatedReplay, reqRotatedReplay)
+
+	if wRotatedReplay.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for rotated token after breach detection cascade, got %d", wRotatedReplay.Code)
+	}
+}
+
+func TestAuthAPI_Logout_Revocation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping logout revocation integration test in short mode")
+	}
+
+	router, _ := setupTestRouter(t)
+
+	// Register user
+	uniqueSuffix := time.Now().UnixNano()
+	email := fmt.Sprintf("logout_tester_%d@example.com", uniqueSuffix)
+	password := "SecureP@ssw0rd!2026"
+	company := fmt.Sprintf("Logout Corp %d", uniqueSuffix)
+
+	regPayload := auth.RegisterRequest{
+		Email:       email,
+		Password:    password,
+		FullName:    "Logout Tester",
+		CompanyName: company,
+	}
+	body, _ := json.Marshal(regPayload)
+
+	wReg := httptest.NewRecorder()
+	reqReg := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(body))
+	reqReg.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wReg, reqReg)
+
+	var regEnv response.SuccessEnvelope
+	_ = json.Unmarshal(wReg.Body.Bytes(), &regEnv)
+	regBytes, _ := json.Marshal(regEnv.Data)
+	var regResp auth.AuthResponse
+	_ = json.Unmarshal(regBytes, &regResp)
+
+	// Call POST /api/v1/auth/logout with the refresh token
+	logoutPayload := auth.LogoutRequest{
+		RefreshToken: regResp.RefreshToken,
+	}
+	lBody, _ := json.Marshal(logoutPayload)
+
+	wLogout := httptest.NewRecorder()
+	reqLogout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(lBody))
+	reqLogout.Header.Set("Authorization", "Bearer "+regResp.Token)
+	reqLogout.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wLogout, reqLogout)
+
+	if wLogout.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on logout, got %d: %s", wLogout.Code, wLogout.Body.String())
+	}
+
+	// Verify that the logged-out refresh token can no longer be used to refresh
+	refreshPayload := auth.RefreshRequest{
+		RefreshToken: regResp.RefreshToken,
+	}
+	rBody, _ := json.Marshal(refreshPayload)
+
+	wRefresh := httptest.NewRecorder()
+	reqRefresh := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rBody))
+	reqRefresh.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(wRefresh, reqRefresh)
+
+	if wRefresh.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized on refreshing with logged-out token, got %d", wRefresh.Code)
 	}
 }

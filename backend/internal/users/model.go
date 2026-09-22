@@ -15,6 +15,7 @@ type User struct {
 	PhoneNumber     *string    `json:"phone_number,omitempty"`
 	IsActive        bool       `json:"is_active"`
 	IsPlatformAdmin bool       `json:"is_platform_admin"`
+	EmailVerified   bool       `json:"email_verified"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`

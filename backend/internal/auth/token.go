@@ -1,8 +1,12 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -91,4 +95,23 @@ func (s *TokenService) ValidateAccessToken(tokenStr string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// GenerateRefreshToken generates a cryptographically secure 256-bit random opaque refresh token
+// and returns both the raw token (for the client) and its SHA-256 hash (for database storage).
+func GenerateRefreshToken() (rawToken string, tokenHash string, err error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", "", fmt.Errorf("failed to generate secure random bytes for refresh token: %w", err)
+	}
+
+	rawToken = hex.EncodeToString(bytes)
+	tokenHash = HashRefreshToken(rawToken)
+	return rawToken, tokenHash, nil
+}
+
+// HashRefreshToken computes the SHA-256 hexadecimal digest of a raw refresh token string.
+func HashRefreshToken(rawToken string) string {
+	hash := sha256.Sum256([]byte(strings.TrimSpace(rawToken)))
+	return hex.EncodeToString(hash[:])
 }

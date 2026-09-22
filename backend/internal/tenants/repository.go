@@ -26,6 +26,7 @@ type Repository interface {
 	GetBySlug(ctx context.Context, slug string) (*Tenant, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID) ([]Tenant, error)
 	ListAll(ctx context.Context) ([]Tenant, error)
+	Update(ctx context.Context, tenant *Tenant) error
 }
 
 type pgRepository struct {
@@ -143,6 +144,23 @@ func (r *pgRepository) ListAll(ctx context.Context) ([]Tenant, error) {
 		result = append(result, t)
 	}
 	return result, nil
+}
+
+func (r *pgRepository) Update(ctx context.Context, tenant *Tenant) error {
+	tenant.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE tenants
+		SET name = $1, contact_email = $2, updated_at = $3
+		WHERE id = $4
+	`
+	tag, err := r.pool.Exec(ctx, query, tenant.Name, tenant.ContactEmail, tenant.UpdatedAt, tenant.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update tenant: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
 }
 
 func scanTenant(row pgx.Row) (*Tenant, error) {

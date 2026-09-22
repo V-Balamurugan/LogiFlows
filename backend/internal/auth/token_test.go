@@ -81,3 +81,36 @@ func TestTokenService_WrongSecret(t *testing.T) {
 		t.Fatal("expected validation failure with wrong secret, got nil")
 	}
 }
+
+func TestGenerateRefreshToken_FormatAndUniqueness(t *testing.T) {
+	rawToken1, hash1, err := auth.GenerateRefreshToken()
+	if err != nil {
+		t.Fatalf("expected GenerateRefreshToken to succeed, got %v", err)
+	}
+
+	if len(rawToken1) != 64 {
+		t.Errorf("expected 64-char hex string (32 bytes), got length %d", len(rawToken1))
+	}
+	if len(hash1) != 64 {
+		t.Errorf("expected 64-char SHA-256 hex digest, got length %d", len(hash1))
+	}
+
+	// Verify hash function matches
+	computedHash := auth.HashRefreshToken(rawToken1)
+	if computedHash != hash1 {
+		t.Errorf("expected HashRefreshToken to match generated hash: got %s, want %s", computedHash, hash1)
+	}
+
+	// Verify uniqueness across consecutive calls
+	rawToken2, hash2, err := auth.GenerateRefreshToken()
+	if err != nil {
+		t.Fatalf("expected second GenerateRefreshToken to succeed, got %v", err)
+	}
+
+	if rawToken1 == rawToken2 {
+		t.Errorf("expected distinct cryptographically random tokens, got identical: %s", rawToken1)
+	}
+	if hash1 == hash2 {
+		t.Errorf("expected distinct hashes for distinct tokens, got identical: %s", hash1)
+	}
+}

@@ -29,6 +29,7 @@ type UserSummary struct {
 	PhoneNumber     *string   `json:"phone_number,omitempty"`
 	IsActive        bool      `json:"is_active"`
 	IsPlatformAdmin bool      `json:"is_platform_admin"`
+	EmailVerified   bool      `json:"email_verified"`
 }
 
 // TenantSummary represents the tenant context and caller's role in that tenant.
@@ -39,12 +40,24 @@ type TenantSummary struct {
 	Role string    `json:"role"`
 }
 
-// AuthResponse is returned on successful registration or login.
+// AuthResponse is returned on successful registration, login, or token refresh.
 type AuthResponse struct {
-	Token     string          `json:"token"`
-	ExpiresAt time.Time       `json:"expires_at"`
-	User      UserSummary     `json:"user"`
-	Tenants   []TenantSummary `json:"tenants"`
+	Token                 string          `json:"token"`
+	ExpiresAt             time.Time       `json:"expires_at"`
+	RefreshToken          string          `json:"refresh_token"`
+	RefreshTokenExpiresAt time.Time       `json:"refresh_token_expires_at"`
+	User                  UserSummary     `json:"user"`
+	Tenants               []TenantSummary `json:"tenants"`
+}
+
+// RefreshRequest holds the refresh token payload for token rotation.
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// LogoutRequest holds the optional refresh token to revoke on logout.
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 // CurrentUserResponse is returned by GET /api/v1/auth/me.

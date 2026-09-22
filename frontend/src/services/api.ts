@@ -8,6 +8,7 @@ import type {
 
 const API_BASE = 'http://localhost:8080/api/v1';
 const TOKEN_KEY = 'logiflows_access_token';
+const REFRESH_TOKEN_KEY = 'logiflows_refresh_token';
 
 export function getSavedToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -17,9 +18,21 @@ export function setSavedToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-export function clearSavedToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+export function getSavedRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
+
+export function setSavedRefreshToken(token: string): void {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+}
+
+export function clearSavedTokens(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+// Backward compatibility alias
+export const clearSavedToken = clearSavedTokens;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getSavedToken();
@@ -57,17 +70,39 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   // Auth
-  register: (payload: { email: string; password: string; full_name: string; phone_number?: string; company_name: string }) =>
-    request<AuthResponse>('/auth/register', {
+  register: async (payload: { email: string; password: string; full_name: string; phone_number?: string; company_name: string }): Promise<AuthResponse> => {
+    const data = await request<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }),
+    });
+    if (data.token) setSavedToken(data.token);
+    if (data.refresh_token) setSavedRefreshToken(data.refresh_token);
+    return data;
+  },
 
-  login: (payload: { email: string; password: string }) =>
-    request<AuthResponse>('/auth/login', {
+  login: async (payload: { email: string; password: string }): Promise<AuthResponse> => {
+    const data = await request<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }),
+    });
+    if (data.token) setSavedToken(data.token);
+    if (data.refresh_token) setSavedRefreshToken(data.refresh_token);
+    return data;
+  },
+
+  refresh: async (): Promise<AuthResponse> => {
+    const refreshToken = getSavedRefreshToken();
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+    const data = await request<AuthResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (data.token) setSavedToken(data.token);
+    if (data.refresh_token) setSavedRefreshToken(data.refresh_token);
+    return data;
+  },
 
   getMe: () =>
     request<CurrentUserResponse>('/auth/me', {
@@ -75,10 +110,14 @@ export const api = {
     }),
 
   logout: async () => {
+    const refreshToken = getSavedRefreshToken();
     try {
-      await request('/auth/logout', { method: 'POST' });
+      await request('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: refreshToken || '' }),
+      });
     } finally {
-      clearSavedToken();
+      clearSavedTokens();
     }
   },
 
@@ -92,5 +131,11 @@ export const api = {
     request<MemberDetails>(`/tenants/${tenantId}/members`, {
       method: 'POST',
       body: JSON.stringify({ email, role }),
+    }),
+
+  updateTenant: (tenantId: string, payload: { name?: string; contact_email?: string }) =>
+    request<{ id: string; name: string; slug: string; status: string; contact_email: string }>(`/tenants/${tenantId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     }),
 };

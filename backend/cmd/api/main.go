@@ -94,8 +94,9 @@ func main() {
 	membershipRepo := memberships.NewRepository(db.Pool())
 	auditRepo := audit.NewRepository(db.Pool())
 
+	tokenRepo := auth.NewRefreshTokenRepository(db.Pool())
 	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
-	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenService)
+	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
 	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
 
 	healthHandler := health.NewHandler(db, cache)

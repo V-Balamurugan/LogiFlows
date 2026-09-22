@@ -5,6 +5,7 @@ export interface UserSummary {
   phone_number?: string;
   is_active: boolean;
   is_platform_admin: boolean;
+  email_verified?: boolean;
 }
 
 export interface TenantSummary {
@@ -17,6 +18,8 @@ export interface TenantSummary {
 export interface AuthResponse {
   token: string;
   expires_at: string;
+  refresh_token?: string;
+  refresh_token_expires_at?: string;
   user: UserSummary;
   tenants: TenantSummary[];
 }

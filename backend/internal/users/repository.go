@@ -25,6 +25,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
+	SetEmailVerified(ctx context.Context, id uuid.UUID, verified bool) error
 }
 
 type pgRepository struct {
@@ -59,8 +60,8 @@ func insertUser(ctx context.Context, exec dbExecutor, user *User) error {
 	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 
 	query := `
-		INSERT INTO users (id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO users (id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, email_verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	_, err := exec.Exec(ctx, query,
@@ -71,6 +72,7 @@ func insertUser(ctx context.Context, exec dbExecutor, user *User) error {
 		user.PhoneNumber,
 		user.IsActive,
 		user.IsPlatformAdmin,
+		user.EmailVerified,
 		user.CreatedAt,
 		user.UpdatedAt,
 	)
@@ -88,7 +90,7 @@ func insertUser(ctx context.Context, exec dbExecutor, user *User) error {
 
 func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	query := `
-		SELECT id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, email_verified, created_at, updated_at, last_login_at
 		FROM users
 		WHERE id = $1
 	`
@@ -98,7 +100,7 @@ func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (*User, error)
 
 func (r *pgRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	query := `
-		SELECT id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, full_name, phone_number, is_active, is_platform_admin, email_verified, created_at, updated_at, last_login_at
 		FROM users
 		WHERE LOWER(email) = LOWER($1)
 	`
@@ -115,6 +117,15 @@ func (r *pgRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
+func (r *pgRepository) SetEmailVerified(ctx context.Context, id uuid.UUID, verified bool) error {
+	query := `UPDATE users SET email_verified = $1, updated_at = $2 WHERE id = $3`
+	_, err := r.pool.Exec(ctx, query, verified, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("failed to update email verification status: %w", err)
+	}
+	return nil
+}
+
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(
@@ -125,6 +136,7 @@ func scanUser(row pgx.Row) (*User, error) {
 		&u.PhoneNumber,
 		&u.IsActive,
 		&u.IsPlatformAdmin,
+		&u.EmailVerified,
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&u.LastLoginAt,
