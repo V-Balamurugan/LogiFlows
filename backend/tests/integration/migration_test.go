@@ -86,6 +86,10 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 	log := logger.Init("test", "debug")
 
 	// 1. Rollback migration 00003
+	defer func() {
+		_ = migrations.RunUp(context.Background(), cfg.Database.DSN(), log)
+	}()
+
 	if err := migrations.RunDown(ctx, cfg.Database.DSN(), log); err != nil {
 		t.Fatalf("failed to rollback migration: %v", err)
 	}
