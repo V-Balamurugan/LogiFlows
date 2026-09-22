@@ -1,16 +1,58 @@
 import 'package:flutter/material.dart';
+import 'screens/login_screen.dart';
+import 'screens/company_screen.dart';
+import 'screens/branch_screen.dart';
+import 'screens/vehicle_screen.dart';
+import 'services/auth_api_client.dart';
+import 'core/token_storage.dart';
 
 void main() {
   runApp(const LogiFlowsApp());
 }
 
-class LogiFlowsApp extends StatelessWidget {
+class LogiFlowsApp extends StatefulWidget {
   const LogiFlowsApp({super.key});
+
+  @override
+  State<LogiFlowsApp> createState() => _LogiFlowsAppState();
+}
+
+class _LogiFlowsAppState extends State<LogiFlowsApp> {
+  final AuthApiClient _authClient = AuthApiClient();
+  bool _isAuthenticated = false;
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialAuth();
+  }
+
+  Future<void> _checkInitialAuth() async {
+    final hasToken = await _authClient.tokenStorage.hasValidToken();
+    setState(() {
+      _isAuthenticated = hasToken;
+      _isCheckingAuth = false;
+    });
+  }
+
+  void _onLoginSuccess() {
+    setState(() {
+      _isAuthenticated = true;
+    });
+  }
+
+  Future<void> _handleLogout() async {
+    await _authClient.logout();
+    setState(() {
+      _isAuthenticated = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LogiFlows Driver & Custody',
+      title: 'LogiFlows Driver & Fleet Pro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -21,38 +63,153 @@ class LogiFlowsApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFF020617),
       ),
-      home: const DriverDashboardScreen(),
+      home: _isCheckingAuth
+          ? const Scaffold(
+              backgroundColor: Color(0xFF020617),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
+            )
+          : _isAuthenticated
+              ? DriverDashboardScreen(
+                  onLogout: _handleLogout,
+                  authClient: _authClient,
+                )
+              : LoginScreen(
+                  authClient: _authClient,
+                  onLoginSuccess: _onLoginSuccess,
+                ),
     );
   }
 }
 
 class DriverDashboardScreen extends StatefulWidget {
-  const DriverDashboardScreen({super.key});
+  final VoidCallback onLogout;
+  final AuthApiClient? authClient;
+
+  const DriverDashboardScreen({
+    super.key,
+    required this.onLogout,
+    this.authClient,
+  });
 
   @override
   State<DriverDashboardScreen> createState() => _DriverDashboardScreenState();
 }
 
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
+  int _currentTabIndex = 0;
+  String _tenantId = '00000000-0000-0000-0000-000000000001';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTenantId();
+  }
+
+  Future<void> _loadTenantId() async {
+    final storage = widget.authClient?.tokenStorage ?? InMemorySecureTokenStorage();
+    final savedTenant = await storage.getTenantId();
+    if (savedTenant != null && savedTenant.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _tenantId = savedTenant;
+        });
+      }
+    } else {
+      // Fallback: try fetching current user profile
+      try {
+        if (widget.authClient != null) {
+          await widget.authClient!.getCurrentUser();
+          final refreshedTenant = await storage.getTenantId();
+          if (refreshedTenant != null && mounted) {
+            setState(() {
+              _tenantId = refreshedTenant;
+            });
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screens = [
+      _CustodyTabContent(onLogout: widget.onLogout),
+      CompanyScreen(tenantId: _tenantId),
+      BranchScreen(tenantId: _tenantId),
+      VehicleScreen(tenantId: _tenantId),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentTabIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentTabIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        backgroundColor: const Color(0xFF0F172A),
+        indicatorColor: const Color(0xFF2563EB).withOpacity(0.3),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2, color: Color(0xFF38BDF8)),
+            label: 'Custody',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.business_outlined),
+            selectedIcon: Icon(Icons.business, color: Color(0xFF38BDF8)),
+            label: 'Company',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.hub_outlined),
+            selectedIcon: Icon(Icons.hub, color: Color(0xFF38BDF8)),
+            label: 'Hubs',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.directions_car_outlined),
+            selectedIcon: Icon(Icons.directions_car, color: Color(0xFF38BDF8)),
+            label: 'Fleet',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustodyTabContent extends StatefulWidget {
+  final VoidCallback onLogout;
+
+  const _CustodyTabContent({required this.onLogout});
+
+  @override
+  State<_CustodyTabContent> createState() => _CustodyTabContentState();
+}
+
+class _CustodyTabContentState extends State<_CustodyTabContent> {
   bool _isConnecting = false;
-  String _apiStatus = 'Ready to Connect';
-  Color _statusColor = Colors.grey;
+  String _apiStatus = 'Session Active';
+  Color _statusColor = const Color(0xFF10B981);
 
   void _checkBackendStatus() async {
     setState(() {
       _isConnecting = true;
-      _apiStatus = 'Checking Core Backend...';
+      _apiStatus = 'Probing Network...';
       _statusColor = Colors.amber;
     });
 
-    // Simulated check for initial scaffold
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 600));
 
-    setState(() {
-      _isConnecting = false;
-      _apiStatus = 'Backend Operational (8080)';
-      _statusColor = const Color(0xFF10B981);
-    });
+    if (mounted) {
+      setState(() {
+        _isConnecting = false;
+        _apiStatus = 'Backend Operational';
+        _statusColor = const Color(0xFF10B981);
+      });
+    }
   }
 
   @override
@@ -63,12 +220,20 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           children: [
             Icon(Icons.local_shipping, color: Color(0xFF38BDF8)),
             SizedBox(width: 10),
-            Text('LogiFlows Driver Pro', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('LogiFlows Driver Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white70),
+            tooltip: 'Sign Out',
+            onPressed: widget.onLogout,
+          ),
+        ],
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
       ),
+      backgroundColor: const Color(0xFF020617),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

@@ -1,0 +1,1182 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "LogiFlows API",
+    "description": "LogiFlows Intelligent End-to-End Logistics Coordination and Delivery Management System API.",
+    "version": "1.0",
+    "contact": {
+      "name": "LogiFlows Engineering",
+      "email": "dev@logiflows.com"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Enter 'Bearer <JWT>' to authenticate"
+    }
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Liveness Probe",
+        "description": "Returns 200 OK indicating the API process is alive",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "schema": {
+              "$ref": "#/definitions/HealthResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/readiness": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Readiness Probe",
+        "description": "Verifies active database and Redis connections before accepting ingress traffic",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "All infrastructure dependencies are healthy",
+            "schema": {
+              "$ref": "#/definitions/ReadinessResponse"
+            }
+          },
+          "503": {
+            "description": "One or more dependencies are degraded or unreachable",
+            "schema": {
+              "$ref": "#/definitions/ReadinessResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register Tenant Account",
+        "description": "Registers a new user, creates their primary tenant organization, and grants TENANT_ADMIN privileges",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Registration details",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RegisterRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Account created successfully",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "409": {
+            "description": "Email or company slug collision",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User Login",
+        "description": "Authenticates user credentials and returns JWT access and refresh tokens",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Login credentials",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoginRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Invalid payload format",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "401": {
+            "description": "Invalid email or password",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Rotate Refresh Token",
+        "description": "Validates refresh token, implements single-use rotation, detects token breaches, and returns a new access token",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Refresh token payload",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RefreshRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tokens refreshed and rotated",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked refresh token",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User Logout",
+        "description": "Revokes active refresh token and terminates authenticated session",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "schema": {
+              "$ref": "#/definitions/SuccessEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get Current User Profile",
+        "description": "Returns profile information and tenant memberships for the authenticated user",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/UserResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/current": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "Get Current Tenant / Company",
+        "description": "Returns current active organization details for the authenticated user",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Current tenant details",
+            "schema": { "$ref": "#/definitions/TenantResponseEnvelope" }
+          },
+          "401": { "description": "Unauthorized", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "No company associated", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/companies/current": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "Get Current Company (Alias)",
+        "description": "Returns current active company details for the authenticated user",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Current company details",
+            "schema": { "$ref": "#/definitions/TenantResponseEnvelope" }
+          },
+          "401": { "description": "Unauthorized", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "No company associated", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "List User's Tenants",
+        "description": "Lists all tenant organizations the authenticated user belongs to",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenants listed successfully",
+            "schema": {
+              "$ref": "#/definitions/TenantListResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "Get Tenant",
+        "description": "Retrieves tenant organization details. Enforces multi-tenant isolation.",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant details retrieved",
+            "schema": {
+              "$ref": "#/definitions/TenantResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Cross-tenant access forbidden",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "404": {
+            "description": "Tenant not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Tenants"],
+        "summary": "Update Tenant Metadata",
+        "description": "Updates tenant organization metadata. Requires TENANT_ADMIN role.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Fields to update",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UpdateTenantRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant updated successfully",
+            "schema": {
+              "$ref": "#/definitions/TenantResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires TENANT_ADMIN role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/members": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "List Tenant Members",
+        "description": "Lists members and roles within the tenant organization",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members listed successfully",
+            "schema": {
+              "$ref": "#/definitions/MemberListResponseEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Tenants"],
+        "summary": "Add Member to Tenant",
+        "description": "Adds a user to the tenant with a specified role. Requires TENANT_ADMIN role.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "request",
+            "description": "User email and role",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddMemberRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Member added successfully",
+            "schema": {
+              "$ref": "#/definitions/MemberResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires TENANT_ADMIN role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/branches": {
+      "post": {
+        "tags": ["Branches"],
+        "summary": "Create Branch",
+        "description": "Creates a new logistics hub or branch with PostGIS geospatial coordinates. Requires TENANT_ADMIN.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/CreateBranchRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Branch created", "schema": { "$ref": "#/definitions/BranchResponseEnvelope" } },
+          "400": { "description": "Validation error", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "409": { "description": "Duplicate branch code", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Branches"],
+        "summary": "List Branches",
+        "description": "Lists branches with optional PostGIS spatial radius filtering.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "near_lat", "type": "number", "description": "Latitude for distance search" },
+          { "in": "query", "name": "near_lng", "type": "number", "description": "Longitude for distance search" },
+          { "in": "query", "name": "radius_km", "type": "number", "description": "Radius in kilometers" },
+          { "in": "query", "name": "limit", "type": "integer", "default": 20 },
+          { "in": "query", "name": "offset", "type": "integer", "default": 0 }
+        ],
+        "responses": {
+          "200": { "description": "Branches retrieved", "schema": { "$ref": "#/definitions/BranchListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/branches/{branch_id}": {
+      "get": {
+        "tags": ["Branches"],
+        "summary": "Get Branch by ID",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Branch details", "schema": { "$ref": "#/definitions/BranchResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Not Found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "patch": {
+        "tags": ["Branches"],
+        "summary": "Update Branch",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/UpdateBranchRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Branch updated", "schema": { "$ref": "#/definitions/BranchResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "delete": {
+        "tags": ["Branches"],
+        "summary": "Soft Delete Branch",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Branch deactivated", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/branches/{branch_id}/status": {
+      "patch": {
+        "tags": ["Branches"],
+        "summary": "Update Branch Operating Status",
+        "description": "Sets branch status to ACTIVE, INACTIVE, or SUSPENDED.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" },
+          {
+            "in": "body",
+            "name": "request",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED"], "example": "ACTIVE" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Branch status updated", "schema": { "$ref": "#/definitions/BranchResponseEnvelope" } },
+          "400": { "description": "Invalid status value", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Branch not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees": {
+      "post": {
+        "tags": ["Employees"],
+        "summary": "Onboard Employee",
+        "description": "Registers staff, dispatchers, or delivery drivers with operational roles.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/CreateEmployeeRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Employee created", "schema": { "$ref": "#/definitions/EmployeeResponseEnvelope" } },
+          "400": { "description": "Validation error / Foreign branch", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "409": { "description": "Duplicate employee code", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Employees"],
+        "summary": "List Employees",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "operational_role", "type": "string", "enum": ["DRIVER", "OPERATOR", "DISPATCHER", "SUPERVISOR", "MANAGER"] },
+          { "in": "query", "name": "status", "type": "string" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "limit", "type": "integer", "default": 20 },
+          { "in": "query", "name": "offset", "type": "integer", "default": 0 }
+        ],
+        "responses": {
+          "200": { "description": "Employees listed", "schema": { "$ref": "#/definitions/EmployeeListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/{employee_id}": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get Employee Details",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "employee_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Employee profile", "schema": { "$ref": "#/definitions/EmployeeResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Not Found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "put": {
+        "tags": ["Employees"],
+        "summary": "Update Employee Profile",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "employee_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/UpdateEmployeeRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Employee updated", "schema": { "$ref": "#/definitions/EmployeeResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "delete": {
+        "tags": ["Employees"],
+        "summary": "Deactivate Employee",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "employee_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Employee deactivated", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles": {
+      "post": {
+        "tags": ["Vehicles"],
+        "summary": "Register Fleet Vehicle",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/CreateVehicleRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Vehicle registered", "schema": { "$ref": "#/definitions/VehicleResponseEnvelope" } },
+          "400": { "description": "Validation error", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "409": { "description": "Duplicate registration number", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Vehicles"],
+        "summary": "List Fleet Vehicles",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "vehicle_type", "type": "string" },
+          { "in": "query", "name": "status", "type": "string" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "limit", "type": "integer", "default": 20 },
+          { "in": "query", "name": "offset", "type": "integer", "default": 0 }
+        ],
+        "responses": {
+          "200": { "description": "Vehicles listed", "schema": { "$ref": "#/definitions/VehicleListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles/{vehicle_id}": {
+      "get": {
+        "tags": ["Vehicles"],
+        "summary": "Get Vehicle Details",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle profile", "schema": { "$ref": "#/definitions/VehicleResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Not Found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "patch": {
+        "tags": ["Vehicles"],
+        "summary": "Update Vehicle Specifications",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/UpdateVehicleRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle updated", "schema": { "$ref": "#/definitions/VehicleResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "delete": {
+        "tags": ["Vehicles"],
+        "summary": "Decommission Vehicle",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle decommissioned", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles/{vehicle_id}/assign": {
+      "post": {
+        "tags": ["Vehicles"],
+        "summary": "Assign Driver to Vehicle",
+        "description": "Schedules an active assignment. Rejects double-booking with 409 Conflict.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/AssignVehicleRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Driver assigned", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "400": { "description": "Driver not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "409": { "description": "Vehicle or driver already actively assigned", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles/{vehicle_id}/unassign": {
+      "post": {
+        "tags": ["Vehicles"],
+        "summary": "Unassign Driver from Vehicle",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Driver unassigned, vehicle now available", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "UP" },
+        "service": { "type": "string", "example": "logiflows-api" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReadinessResponse": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "READY" },
+        "checks": {
+          "type": "object",
+          "properties": {
+            "database": { "type": "string", "example": "healthy" },
+            "redis": { "type": "string", "example": "healthy" }
+          }
+        }
+      }
+    },
+    "RegisterRequest": {
+      "type": "object",
+      "required": ["email", "password", "full_name", "company_name"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "admin@quicklogistics.com" },
+        "password": { "type": "string", "format": "password", "example": "ComplexP@ssw0rd!2026" },
+        "full_name": { "type": "string", "example": "Alice Logistics Admin" },
+        "phone_number": { "type": "string", "example": "+1-555-0199" },
+        "company_name": { "type": "string", "example": "Quick Logistics" }
+      }
+    },
+    "LoginRequest": {
+      "type": "object",
+      "required": ["email", "password"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "admin@quicklogistics.com" },
+        "password": { "type": "string", "format": "password", "example": "ComplexP@ssw0rd!2026" }
+      }
+    },
+    "RefreshRequest": {
+      "type": "object",
+      "required": ["refresh_token"],
+      "properties": {
+        "refresh_token": { "type": "string", "example": "rft_a1b2c3d4e5f6..." }
+      }
+    },
+    "CreateTenantRequest": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "example": "Apex Delivery Corp" }
+      }
+    },
+    "UpdateTenantRequest": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "example": "Apex Delivery Global" },
+        "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"], "example": "ACTIVE" }
+      }
+    },
+    "AddMemberRequest": {
+      "type": "object",
+      "required": ["email", "role"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "dispatcher@quicklogistics.com" },
+        "role": { "type": "string", "enum": ["TENANT_ADMIN", "TENANT_OPERATOR", "VIEWER"], "example": "TENANT_OPERATOR" }
+      }
+    },
+    "CreateBranchRequest": {
+      "type": "object",
+      "required": ["branch_code", "name", "address", "city", "country", "latitude", "longitude"],
+      "properties": {
+        "branch_code": { "type": "string", "example": "DEL-HUB-01" },
+        "name": { "type": "string", "example": "Delhi North Hub" },
+        "address": { "type": "string", "example": "Plot 42, GT Karnal Road" },
+        "city": { "type": "string", "example": "New Delhi" },
+        "state": { "type": "string", "example": "Delhi" },
+        "postal_code": { "type": "string", "example": "110033" },
+        "country": { "type": "string", "example": "India" },
+        "latitude": { "type": "number", "example": 28.7041 },
+        "longitude": { "type": "number", "example": 77.1025 },
+        "coverage_radius_km": { "type": "number", "example": 25.0 }
+      }
+    },
+    "UpdateBranchRequest": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "coverage_radius_km": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED"] }
+      }
+    },
+    "CreateEmployeeRequest": {
+      "type": "object",
+      "required": ["employee_code", "first_name", "last_name", "designation", "employment_type", "operational_role"],
+      "properties": {
+        "employee_code": { "type": "string", "example": "DRV-101" },
+        "first_name": { "type": "string", "example": "Arjun" },
+        "last_name": { "type": "string", "example": "Patel" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "designation": { "type": "string", "example": "Delivery Driver" },
+        "employment_type": { "type": "string", "enum": ["FULL_TIME", "PART_TIME", "CONTRACTOR", "INTERN"] },
+        "operational_role": { "type": "string", "enum": ["DRIVER", "OPERATOR", "DISPATCHER", "SUPERVISOR", "MANAGER"] },
+        "license_number": { "type": "string", "example": "DL-04-2022-9999" },
+        "branch_id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "UpdateEmployeeRequest": {
+      "type": "object",
+      "properties": {
+        "first_name": { "type": "string" },
+        "last_name": { "type": "string" },
+        "designation": { "type": "string" },
+        "operational_role": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "ON_LEAVE", "SUSPENDED", "TERMINATED"] }
+      }
+    },
+    "CreateVehicleRequest": {
+      "type": "object",
+      "required": ["registration_number", "vehicle_type", "max_weight_kg", "max_volume_cbm"],
+      "properties": {
+        "registration_number": { "type": "string", "example": "DL-01-EV-2026" },
+        "vehicle_type": { "type": "string", "enum": ["ELECTRIC_VAN", "VAN", "MOTORCYCLE", "TRUCK", "THREE_WHEELER"] },
+        "make_model": { "type": "string", "example": "Tata Ace EV" },
+        "year": { "type": "integer", "example": 2026 },
+        "max_weight_kg": { "type": "number", "example": 750.0 },
+        "max_volume_cbm": { "type": "number", "example": 4.5 },
+        "branch_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "UpdateVehicleRequest": {
+      "type": "object",
+      "properties": {
+        "vehicle_type": { "type": "string" },
+        "make_model": { "type": "string" },
+        "status": { "type": "string", "enum": ["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "MAINTENANCE", "DECOMMISSIONED"] }
+      }
+    },
+    "AssignVehicleRequest": {
+      "type": "object",
+      "required": ["driver_id"],
+      "properties": {
+        "driver_id": { "type": "string", "format": "uuid" },
+        "notes": { "type": "string", "example": "Morning Route Hub 1" }
+      }
+    },
+    "AuthResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+            "refresh_token": { "type": "string", "example": "rft_..." },
+            "user": { "$ref": "#/definitions/User" },
+            "tenant": { "$ref": "#/definitions/Tenant" },
+            "role": { "type": "string", "example": "TENANT_ADMIN" }
+          }
+        }
+      }
+    },
+    "UserResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/User" }
+      }
+    },
+    "TenantResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/Tenant" }
+      }
+    },
+    "TenantListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Tenant" }
+        }
+      }
+    },
+    "MemberListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MemberDetails" }
+        }
+      }
+    },
+    "MemberResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/MemberDetails" }
+      }
+    },
+    "BranchResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/Branch" },
+        "message": { "type": "string" }
+      }
+    },
+    "BranchListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "branches": { "type": "array", "items": { "$ref": "#/definitions/Branch" } },
+            "total": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "EmployeeResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/Employee" },
+        "message": { "type": "string" }
+      }
+    },
+    "EmployeeListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "employees": { "type": "array", "items": { "$ref": "#/definitions/Employee" } },
+            "total": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "VehicleResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/Vehicle" },
+        "message": { "type": "string" }
+      }
+    },
+    "VehicleListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "vehicles": { "type": "array", "items": { "$ref": "#/definitions/Vehicle" } },
+            "total": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "SuccessEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "type": "object" },
+        "message": { "type": "string", "example": "Operation completed successfully" }
+      }
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string", "example": "VALIDATION_FAILED" },
+            "message": { "type": "string", "example": "Invalid email format" },
+            "request_id": { "type": "string", "format": "uuid" },
+            "details": { "type": "object" }
+          }
+        }
+      }
+    },
+    "User": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "full_name": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "email_verified": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Tenant": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "MemberDetails": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "full_name": { "type": "string" },
+        "role": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Branch": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "branch_code": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "country": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "coverage_radius_km": { "type": "number" },
+        "status": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "distance_km": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Employee": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "branch_id": { "type": "string", "format": "uuid" },
+        "branch_name": { "type": "string" },
+        "employee_code": { "type": "string" },
+        "first_name": { "type": "string" },
+        "last_name": { "type": "string" },
+        "designation": { "type": "string" },
+        "operational_role": { "type": "string" },
+        "status": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Vehicle": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "assigned_branch_id": { "type": "string", "format": "uuid" },
+        "branch_name": { "type": "string" },
+        "registration_number": { "type": "string" },
+        "vehicle_type": { "type": "string" },
+        "make_model": { "type": "string" },
+        "year": { "type": "integer" },
+        "max_weight_kg": { "type": "number" },
+        "max_volume_cbm": { "type": "number" },
+        "status": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "current_driver_name": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
