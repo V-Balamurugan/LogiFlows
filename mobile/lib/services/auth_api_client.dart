@@ -58,6 +58,9 @@ class AuthApiClient {
         accessToken: authResp.token,
         refreshToken: authResp.refreshToken,
       );
+      if (authResp.tenants.isNotEmpty) {
+        await tokenStorage.saveTenantId(authResp.tenants.first.id);
+      }
 
       return authResp;
     } else {
@@ -108,6 +111,9 @@ class AuthApiClient {
         accessToken: authResp.token,
         refreshToken: authResp.refreshToken,
       );
+      if (authResp.tenants.isNotEmpty) {
+        await tokenStorage.saveTenantId(authResp.tenants.first.id);
+      }
 
       return authResp;
     } else {

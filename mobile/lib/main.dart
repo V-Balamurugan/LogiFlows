@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
+import 'screens/company_screen.dart';
+import 'screens/branch_screen.dart';
+import 'screens/vehicle_screen.dart';
 import 'services/auth_api_client.dart';
+import 'core/token_storage.dart';
 
 void main() {
   runApp(const LogiFlowsApp());
@@ -48,7 +52,7 @@ class _LogiFlowsAppState extends State<LogiFlowsApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LogiFlows Driver & Custody',
+      title: 'LogiFlows Driver & Fleet Pro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -65,7 +69,10 @@ class _LogiFlowsAppState extends State<LogiFlowsApp> {
               body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
             )
           : _isAuthenticated
-              ? DriverDashboardScreen(onLogout: _handleLogout)
+              ? DriverDashboardScreen(
+                  onLogout: _handleLogout,
+                  authClient: _authClient,
+                )
               : LoginScreen(
                   authClient: _authClient,
                   onLoginSuccess: _onLoginSuccess,
@@ -76,10 +83,12 @@ class _LogiFlowsAppState extends State<LogiFlowsApp> {
 
 class DriverDashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
+  final AuthApiClient? authClient;
 
   const DriverDashboardScreen({
     super.key,
     required this.onLogout,
+    this.authClient,
   });
 
   @override
@@ -87,6 +96,114 @@ class DriverDashboardScreen extends StatefulWidget {
 }
 
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
+  int _currentTabIndex = 0;
+  String _tenantId = '00000000-0000-0000-0000-000000000001';
+  bool _isLoadingTenant = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTenantId();
+  }
+
+  Future<void> _loadTenantId() async {
+    final storage = widget.authClient?.tokenStorage ?? InMemorySecureTokenStorage();
+    final savedTenant = await storage.getTenantId();
+    if (savedTenant != null && savedTenant.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _tenantId = savedTenant;
+          _isLoadingTenant = false;
+        });
+      }
+    } else {
+      // Fallback: try fetching current user profile
+      try {
+        if (widget.authClient != null) {
+          await widget.authClient!.getCurrentUser();
+          final refreshedTenant = await storage.getTenantId();
+          if (refreshedTenant != null && mounted) {
+            setState(() {
+              _tenantId = refreshedTenant;
+            });
+          }
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _isLoadingTenant = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoadingTenant) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF020617),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
+      );
+    }
+
+    final screens = [
+      CompanyScreen(tenantId: _tenantId),
+      BranchScreen(tenantId: _tenantId),
+      VehicleScreen(tenantId: _tenantId),
+      _CustodyTabContent(onLogout: widget.onLogout),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentTabIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentTabIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        backgroundColor: const Color(0xFF0F172A),
+        indicatorColor: const Color(0xFF2563EB).withOpacity(0.3),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.business_outlined),
+            selectedIcon: Icon(Icons.business, color: Color(0xFF38BDF8)),
+            label: 'Company',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.hub_outlined),
+            selectedIcon: Icon(Icons.hub, color: Color(0xFF38BDF8)),
+            label: 'Hubs',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_shipping_outlined),
+            selectedIcon: Icon(Icons.local_shipping, color: Color(0xFF38BDF8)),
+            label: 'Fleet',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2, color: Color(0xFF38BDF8)),
+            label: 'Custody',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustodyTabContent extends StatefulWidget {
+  final VoidCallback onLogout;
+
+  const _CustodyTabContent({required this.onLogout});
+
+  @override
+  State<_CustodyTabContent> createState() => _CustodyTabContentState();
+}
+
+class _CustodyTabContentState extends State<_CustodyTabContent> {
   bool _isConnecting = false;
   String _apiStatus = 'Session Active';
   Color _statusColor = const Color(0xFF10B981);
@@ -100,11 +217,13 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
 
     await Future.delayed(const Duration(milliseconds: 600));
 
-    setState(() {
-      _isConnecting = false;
-      _apiStatus = 'Backend Operational';
-      _statusColor = const Color(0xFF10B981);
-    });
+    if (mounted) {
+      setState(() {
+        _isConnecting = false;
+        _apiStatus = 'Backend Operational';
+        _statusColor = const Color(0xFF10B981);
+      });
+    }
   }
 
   @override
@@ -115,7 +234,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           children: [
             Icon(Icons.local_shipping, color: Color(0xFF38BDF8)),
             SizedBox(width: 10),
-            Text('LogiFlows Driver Pro', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('LogiFlows Driver Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         actions: [
@@ -128,6 +247,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
       ),
+      backgroundColor: const Color(0xFF020617),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

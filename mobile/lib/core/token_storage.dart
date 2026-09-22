@@ -7,6 +7,8 @@ abstract class TokenStorage {
   Future<String?> getRefreshToken();
   Future<void> clearTokens();
   Future<bool> hasValidToken();
+  Future<void> saveTenantId(String tenantId);
+  Future<String?> getTenantId();
 }
 
 /// In-memory and platform-fallback token storage implementation.
@@ -18,6 +20,7 @@ class InMemorySecureTokenStorage implements TokenStorage {
 
   String? _accessToken;
   String? _refreshToken;
+  String? _tenantId;
 
   @override
   Future<void> saveTokens({required String accessToken, String? refreshToken}) async {
@@ -38,9 +41,20 @@ class InMemorySecureTokenStorage implements TokenStorage {
   }
 
   @override
+  Future<void> saveTenantId(String tenantId) async {
+    _tenantId = tenantId;
+  }
+
+  @override
+  Future<String?> getTenantId() async {
+    return _tenantId;
+  }
+
+  @override
   Future<void> clearTokens() async {
     _accessToken = null;
     _refreshToken = null;
+    _tenantId = null;
   }
 
   @override
