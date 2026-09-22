@@ -50,12 +50,12 @@ To guarantee strict tenant isolation testing:
 ### 3.1 Migration Validation Database
 * Integration tests verify migrations using Goose on the local PostgreSQL container `logiflows_dev`.
 * `TestMigrations_RollbackAndReapply` performs:
-  1. `RunDown`: Rolls back the latest migration (`00003_add_refresh_tokens_and_user_verification.sql`).
-  2. Verifies table schema status.
-  3. `RunUp`: Re-applies the migration to restore the complete schema to version 3.
+  1. `RunDown`: Rolls back the latest migration (`00006_create_vehicles_and_assignments.sql`).
+  2. Verifies table schema status (asserts `vehicles` and `vehicle_assignments` are dropped).
+  3. `RunUp`: Re-applies the migration to restore the complete schema to version 6.
 
 ### 3.2 Relational Integrity & Cascades
-* Database schema employs foreign keys with `ON DELETE CASCADE` between `tenants` and `tenant_memberships`, and between `users` and `refresh_tokens`.
+* Database schema employs foreign keys with `ON DELETE CASCADE` between `tenants` and `tenant_memberships`, between `users` and `refresh_tokens`, between `tenants` and `branches`/`employees`/`vehicles`, and between `vehicles` and `vehicle_assignments`.
 * Deleting a test tenant or user automatically purges associated child records, preventing orphaned data accumulation.
 
 ---

@@ -30,6 +30,11 @@ LogiFlows is an enterprise multi-tenant logistics orchestration system. Its secu
 | **SQL Injection** | Submit SQL payload in registration name, email, or tenant slug | Gin Handlers & Repositories | Parameterized SQL queries via `pgx` prevent statement tampering | `TC-P1-SEC-001` |
 | **XSS Injection** | Submit HTML `<script>` tags in full name or tenant metadata | API Handlers | Inputs safely stored; responses rendered as JSON with proper escaping | `TC-P1-SEC-002` |
 | **Audit Evasion** | Perform sensitive action (register, login, tenant create, member invite) | `internal/audit` | Every critical action generates immutable row in `audit_logs` | `TC-P1-AUD-001` |
+| **Cross-Tenant Branch IDOR** | Tenant Alpha user attempts to view/modify Tenant Beta branch | `middleware.TenantContext` | Return `403 Forbidden` (`CROSS_TENANT_ACCESS_DENIED`) | `TC-P2-BRN-003` |
+| **Foreign Branch Hijacking** | Tenant Alpha assigns employee to Tenant Beta branch ID | `internal/employees/service.go` | Reject cross-tenant branch association with `400 Bad Request` | `TC-P2-EMP-002` |
+| **Cross-Tenant Vehicle IDOR** | Tenant Alpha user attempts to view or assign Tenant Beta vehicle | `internal/vehicles/service.go` | Return `403 Forbidden` (`CROSS_TENANT_ACCESS_DENIED`) | `TC-P2-VEH-004` |
+| **Viewer Role Resource Mutation** | `VIEWER` attempts to create/modify branch, employee, or vehicle | `middleware.RequireRole` | Return `403 Forbidden` (`INSUFFICIENT_PERMISSIONS`) | `TC-P2-ORG-001` |
+| **Double-Assignment Conflict** | Concurrently assigning already assigned vehicle or driver | PostgreSQL Partial Unique Indexes | Enforce database-level uniqueness, return `409 Conflict` | `TC-P2-VEH-003` |
 
 ---
 

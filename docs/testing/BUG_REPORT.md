@@ -85,3 +85,31 @@ Status: <OPEN / IN_PROGRESS / RESOLVED / CLOSED>
 * **Regression Test**: `TestAuthAPI_Logout_Revocation`
 * **Verification Result**: **PASS**
 * **Status**: **RESOLVED**
+
+---
+
+### BUG-P2-004: Postgres Connection Pool Exhaustion in Integration Test Suite
+* **Phase**: Phase 2 | **Module**: Integration Test Harness | **Severity**: Critical | **Priority**: P0
+* **Preconditions**: Executing 30+ integration tests sequentially without tearing down individual connection pools.
+* **Steps to Reproduce**: Run `go test -v ./tests/integration/...` with unrestricted pool limits per test.
+* **Expected Result**: All tests complete without PostgreSQL connection exhaustion.
+* **Actual Result**: `FATAL: sorry, too many clients already (SQLSTATE 53300)` on test 25+.
+* **Root Cause**: `setupTestRouter` opened a new `*pgxpool.Pool` for each integration test without invoking `db.Close()` on test completion.
+* **Fix Applied**: Configured `cfg.Database.MaxOpenConns = 5`, `MaxIdleConns = 1`, and registered `t.Cleanup(func() { db.Close() })` in the test setup.
+* **Regression Test**: `go test -v ./tests/integration/...` (Full suite runs cleanly with zero pool leaks)
+* **Verification Result**: **PASS**
+* **Status**: **RESOLVED**
+
+---
+
+### BUG-P2-005: Stale Rollback Assertion in Database Migration Integration Test
+* **Phase**: Phase 2 | **Module**: Database Migrations | **Severity**: Major | **Priority**: P1
+* **Preconditions**: Migrations 00004, 00005, and 00006 added to the migration directory.
+* **Steps to Reproduce**: Run `TestMigrations_RollbackAndReapply` in `backend/tests/integration/migration_test.go`.
+* **Expected Result**: Latest migration rollback verified accurately.
+* **Actual Result**: Test failed because it asserted table `refresh_tokens` (migration 00003) was dropped, whereas `RunDown` correctly rolled back migration 00006 (`vehicles` and `vehicle_assignments`).
+* **Root Cause**: Hardcoded assertion was not updated when Phase 2 migrations were added.
+* **Fix Applied**: Updated `TestMigrations_RollbackAndReapply` to assert that `vehicles` and `vehicle_assignments` are dropped during rollback and restored during reapply.
+* **Regression Test**: `TestMigrations_RollbackAndReapply`
+* **Verification Result**: **PASS**
+* **Status**: **RESOLVED**

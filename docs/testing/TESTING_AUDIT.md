@@ -238,17 +238,17 @@ PASS — 13 tests, 0 failures (Total time: 8.47s)
 | `TC-P1-AUT-002` | Auth | Duplicate email registration returns 409 Conflict | API | P0 | **PASS** |
 | `TC-P1-AUT-003` | Auth | Registration with password < 8 chars returns 400 Bad Request | API / Security | P0 | **PASS** |
 | `TC-P1-AUT-004` | Auth | Registration with invalid email format returns 400 Bad Request | API / Security | P1 | **PASS** |
-| `TC-P1-AUT-005` | Auth | Registration with empty full name returns 400 Bad Request | API | P1 | NOT RUN |
-| `TC-P1-AUT-006` | Auth | Registration email normalization (case insensitive lookup) | API / Security | P1 | NOT RUN |
+| `TC-P1-AUT-005` | Auth | Registration with empty full name returns 400 Bad Request | API | P1 | **PASS** |
+| `TC-P1-AUT-006` | Auth | Registration email normalization (case insensitive lookup) | API / Security | P1 | **PASS** |
 | `TC-P1-AUT-007` | Auth | Password hashing uses bcrypt cost 12 and never stores plaintext | Unit / Security | P0 | **PASS** |
 | `TC-P1-AUT-008` | Auth | User model serialization strictly omits `password_hash` | Unit / Security | P0 | **PASS** |
 | `TC-P1-AUT-009` | Auth | Login with valid credentials returns access token and refresh token | API | P0 | **PASS** |
 | `TC-P1-AUT-010` | Auth | Login with incorrect password returns 401 Unauthorized | API / Security | P0 | **PASS** |
-| `TC-P1-AUT-011` | Auth | Login with non-existent email returns 401 Unauthorized | API / Security | P0 | NOT RUN |
+| `TC-P1-AUT-011` | Auth | Login with non-existent email returns 401 Unauthorized | API / Security | P0 | **PASS** |
 | `TC-P1-AUT-012` | Auth | Access protected `/api/v1/auth/me` with valid Bearer JWT returns user profile | API | P0 | **PASS** |
 | `TC-P1-AUT-013` | Auth | Access protected `/api/v1/auth/me` with expired token returns 401 | Security | P0 | **PASS** |
-| `TC-P1-AUT-014` | Auth | Access protected `/api/v1/auth/me` with forged/tampered token returns 401 | Security | P0 | NOT RUN |
-| `TC-P1-AUT-015` | Auth | Access protected endpoint with missing Bearer header returns 401 | Security | P0 | NOT RUN |
+| `TC-P1-AUT-014` | Auth | Access protected `/api/v1/auth/me` with forged/tampered token returns 401 | Security | P0 | **PASS** |
+| `TC-P1-AUT-015` | Auth | Access protected endpoint with missing Bearer header returns 401 | Security | P0 | **PASS** |
 | `TC-P1-AUT-016` | Auth | Token refresh rotates refresh token and returns new access token | API / Security | P0 | **PASS** |
 | `TC-P1-AUT-017` | Auth | Replayed/reused refresh token triggers breach detection and revokes family | Security | P0 | **PASS** |
 | `TC-P1-AUT-018` | Auth | Logout revokes refresh token; subsequent refresh attempts return 401 | API / Security | P0 | **PASS** |
@@ -265,7 +265,7 @@ PASS — 13 tests, 0 failures (Total time: 8.47s)
 | `TC-P1-MEM-003` | Membership | Adding duplicate membership to same tenant returns 409 Conflict | API | P1 | **PASS** |
 | `TC-P1-MEM-004` | Membership | Inviting non-existent user email returns 404 Not Found | API | P1 | **PASS** |
 | `TC-P1-RBC-001` | RBAC | Permission matrix allows valid role actions and forbids unauthorized actions | Unit / Security | P0 | **PASS** |
-| `TC-P1-AUD-001` | Audit | Audit records created for tenant creation, member addition, role change | Integration | P1 | NOT RUN |
+| `TC-P1-AUD-001` | Audit | Audit records created for tenant creation, member addition, role change | Integration | P1 | **PASS** |
 
 ---
 
