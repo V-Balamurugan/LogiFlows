@@ -167,6 +167,7 @@ class VehicleModel {
   final double maxVolumeCbm;
   final String status;
   final bool isActive;
+  final bool isElectric;
   final String? currentDriverName;
   final String? currentDriverId;
 
@@ -183,28 +184,32 @@ class VehicleModel {
     required this.maxVolumeCbm,
     required this.status,
     required this.isActive,
+    bool? isElectric,
     this.currentDriverName,
     this.currentDriverId,
-  });
+  }) : isElectric = isElectric ?? (vehicleType == 'ELECTRIC_VAN');
 
   bool get isAvailable => status == 'AVAILABLE';
   bool get isAssigned => status == 'ASSIGNED';
-  bool get isElectric => vehicleType == 'ELECTRIC_VAN';
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
+    final vType = json['vehicle_type'] as String? ?? 'VAN';
+    final electricVal = json['is_electric'] as bool? ?? (vType == 'ELECTRIC_VAN');
+
     return VehicleModel(
       id: json['id'] as String,
       tenantId: json['tenant_id'] as String,
       assignedBranchId: json['assigned_branch_id'] as String?,
       branchName: json['branch_name'] as String?,
       registrationNumber: json['registration_number'] as String,
-      vehicleType: json['vehicle_type'] as String? ?? 'VAN',
+      vehicleType: vType,
       makeModel: json['make_model'] as String?,
       year: json['year'] as int?,
       maxWeightKg: (json['max_weight_kg'] as num?)?.toDouble() ?? 500.0,
       maxVolumeCbm: (json['max_volume_cbm'] as num?)?.toDouble() ?? 3.0,
       status: json['status'] as String? ?? 'AVAILABLE',
       isActive: json['is_active'] as bool? ?? true,
+      isElectric: electricVal,
       currentDriverName: json['current_driver_name'] as String?,
       currentDriverId: json['current_driver_id'] as String?,
     );

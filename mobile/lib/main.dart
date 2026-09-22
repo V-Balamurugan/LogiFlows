@@ -98,7 +98,6 @@ class DriverDashboardScreen extends StatefulWidget {
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   int _currentTabIndex = 0;
   String _tenantId = '00000000-0000-0000-0000-000000000001';
-  bool _isLoadingTenant = true;
 
   @override
   void initState() {
@@ -113,7 +112,6 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
       if (mounted) {
         setState(() {
           _tenantId = savedTenant;
-          _isLoadingTenant = false;
         });
       }
     } else {
@@ -129,28 +127,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           }
         }
       } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _isLoadingTenant = false;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingTenant) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF020617),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
-      );
-    }
-
     final screens = [
+      _CustodyTabContent(onLogout: widget.onLogout),
       CompanyScreen(tenantId: _tenantId),
       BranchScreen(tenantId: _tenantId),
       VehicleScreen(tenantId: _tenantId),
-      _CustodyTabContent(onLogout: widget.onLogout),
     ];
 
     return Scaffold(
@@ -169,6 +155,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
         indicatorColor: const Color(0xFF2563EB).withOpacity(0.3),
         destinations: const [
           NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2, color: Color(0xFF38BDF8)),
+            label: 'Custody',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.business_outlined),
             selectedIcon: Icon(Icons.business, color: Color(0xFF38BDF8)),
             label: 'Company',
@@ -179,14 +170,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             label: 'Hubs',
           ),
           NavigationDestination(
-            icon: Icon(Icons.local_shipping_outlined),
-            selectedIcon: Icon(Icons.local_shipping, color: Color(0xFF38BDF8)),
+            icon: Icon(Icons.directions_car_outlined),
+            selectedIcon: Icon(Icons.directions_car, color: Color(0xFF38BDF8)),
             label: 'Fleet',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2, color: Color(0xFF38BDF8)),
-            label: 'Custody',
           ),
         ],
       ),
