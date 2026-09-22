@@ -1,0 +1,697 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "LogiFlows API",
+    "description": "LogiFlows Intelligent End-to-End Logistics Coordination and Delivery Management System API.",
+    "version": "1.0",
+    "contact": {
+      "name": "LogiFlows Engineering",
+      "email": "dev@logiflows.com"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Enter 'Bearer <JWT>' to authenticate"
+    }
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Liveness Probe",
+        "description": "Returns 200 OK indicating the API process is alive",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "schema": {
+              "$ref": "#/definitions/HealthResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/readiness": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Readiness Probe",
+        "description": "Verifies active database and Redis connections before accepting ingress traffic",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "All infrastructure dependencies are healthy",
+            "schema": {
+              "$ref": "#/definitions/ReadinessResponse"
+            }
+          },
+          "503": {
+            "description": "One or more dependencies are degraded or unreachable",
+            "schema": {
+              "$ref": "#/definitions/ReadinessResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register Tenant Account",
+        "description": "Registers a new user, creates their primary tenant organization, and grants TENANT_ADMIN privileges",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Registration details",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RegisterRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Account created successfully",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "409": {
+            "description": "Email or company slug collision",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User Login",
+        "description": "Authenticates user credentials and returns JWT access and refresh tokens",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Login credentials",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoginRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Invalid payload format",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "401": {
+            "description": "Invalid email or password",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Rotate Refresh Token",
+        "description": "Validates refresh token, implements single-use rotation, detects token breaches, and returns a new access token",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Refresh token payload",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RefreshRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tokens rotated successfully",
+            "schema": {
+              "$ref": "#/definitions/AuthResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Expired, revoked, or compromised refresh token",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Current User Profile",
+        "description": "Returns profile and active memberships of the authenticated user",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved",
+            "schema": {
+              "$ref": "#/definitions/UserResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Missing or invalid JWT",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User Logout",
+        "description": "Revokes active refresh token and invalidates active session",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Optional refresh token to revoke",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/RefreshRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logged out successfully",
+            "schema": {
+              "$ref": "#/definitions/SuccessEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants": {
+      "post": {
+        "tags": ["Tenants"],
+        "summary": "Create Tenant",
+        "description": "Creates a new tenant organization and assigns current user as TENANT_ADMIN",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Tenant creation details",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateTenantRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Tenant created successfully",
+            "schema": {
+              "$ref": "#/definitions/TenantResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "List User Tenants",
+        "description": "Returns all tenant organizations the authenticated user belongs to",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenants listed successfully",
+            "schema": {
+              "$ref": "#/definitions/TenantListResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "Get Tenant",
+        "description": "Retrieves tenant organization details. Enforces multi-tenant isolation.",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant details retrieved",
+            "schema": {
+              "$ref": "#/definitions/TenantResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Cross-tenant access forbidden",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "404": {
+            "description": "Tenant not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Tenants"],
+        "summary": "Update Tenant Metadata",
+        "description": "Updates tenant organization metadata. Requires TENANT_ADMIN role.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "request",
+            "description": "Fields to update",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UpdateTenantRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant updated successfully",
+            "schema": {
+              "$ref": "#/definitions/TenantResponseEnvelope"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires TENANT_ADMIN role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/members": {
+      "get": {
+        "tags": ["Tenants"],
+        "summary": "List Tenant Members",
+        "description": "Lists members and roles within the tenant organization",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members listed successfully",
+            "schema": {
+              "$ref": "#/definitions/MemberListResponseEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Tenants"],
+        "summary": "Add Member to Tenant",
+        "description": "Adds a user to the tenant with a specified role. Requires TENANT_ADMIN role.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "description": "Tenant UUID",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "request",
+            "description": "User email and role",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddMemberRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Member added successfully",
+            "schema": {
+              "$ref": "#/definitions/MemberResponseEnvelope"
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires TENANT_ADMIN role",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          },
+          "409": {
+            "description": "User is already a member",
+            "schema": {
+              "$ref": "#/definitions/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "UP" },
+        "service": { "type": "string", "example": "logiflows-api" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReadinessResponse": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "READY" },
+        "checks": {
+          "type": "object",
+          "properties": {
+            "database": { "type": "string", "example": "healthy" },
+            "redis": { "type": "string", "example": "healthy" }
+          }
+        }
+      }
+    },
+    "RegisterRequest": {
+      "type": "object",
+      "required": ["email", "password", "full_name", "company_name"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "admin@quicklogistics.com" },
+        "password": { "type": "string", "format": "password", "example": "ComplexP@ssw0rd!2026" },
+        "full_name": { "type": "string", "example": "Alice Logistics Admin" },
+        "phone_number": { "type": "string", "example": "+1-555-0199" },
+        "company_name": { "type": "string", "example": "Quick Logistics" }
+      }
+    },
+    "LoginRequest": {
+      "type": "object",
+      "required": ["email", "password"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "admin@quicklogistics.com" },
+        "password": { "type": "string", "format": "password", "example": "ComplexP@ssw0rd!2026" }
+      }
+    },
+    "RefreshRequest": {
+      "type": "object",
+      "required": ["refresh_token"],
+      "properties": {
+        "refresh_token": { "type": "string", "example": "rft_a1b2c3d4e5f6..." }
+      }
+    },
+    "CreateTenantRequest": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "example": "Apex Delivery Corp" }
+      }
+    },
+    "UpdateTenantRequest": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "example": "Apex Delivery Global" },
+        "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"], "example": "ACTIVE" }
+      }
+    },
+    "AddMemberRequest": {
+      "type": "object",
+      "required": ["email", "role"],
+      "properties": {
+        "email": { "type": "string", "format": "email", "example": "dispatcher@quicklogistics.com" },
+        "role": { "type": "string", "enum": ["TENANT_ADMIN", "TENANT_OPERATOR", "VIEWER"], "example": "TENANT_OPERATOR" }
+      }
+    },
+    "AuthResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+            "refresh_token": { "type": "string", "example": "rft_..." },
+            "user": { "$ref": "#/definitions/User" },
+            "tenant": { "$ref": "#/definitions/Tenant" },
+            "role": { "type": "string", "example": "TENANT_ADMIN" }
+          }
+        }
+      }
+    },
+    "UserResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/User" }
+      }
+    },
+    "TenantResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/Tenant" }
+      }
+    },
+    "TenantListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Tenant" }
+        }
+      }
+    },
+    "MemberListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MemberDetails" }
+        }
+      }
+    },
+    "MemberResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "$ref": "#/definitions/MemberDetails" }
+      }
+    },
+    "SuccessEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": { "type": "object" },
+        "message": { "type": "string", "example": "Operation completed successfully" }
+      }
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string", "example": "VALIDATION_FAILED" },
+            "message": { "type": "string", "example": "Invalid email format" },
+            "request_id": { "type": "string", "format": "uuid" },
+            "details": { "type": "object" }
+          }
+        }
+      }
+    },
+    "User": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "full_name": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "email_verified": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Tenant": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "MemberDetails": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "full_name": { "type": "string" },
+        "role": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -2,9 +2,11 @@ package server
 
 import (
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/logiflows/logiflows/backend/docs"
 	"github.com/logiflows/logiflows/backend/internal/auth"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/health"
@@ -12,6 +14,8 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/middleware"
 	"github.com/logiflows/logiflows/backend/internal/response"
 	"github.com/logiflows/logiflows/backend/internal/tenants"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // RouterParams encapsulates dependencies required to wire all application routes.
@@ -47,6 +51,12 @@ func SetupRouter(params RouterParams) *gin.Engine {
 	// Handle 405 Method Not Allowed
 	r.NoMethod(func(c *gin.Context) {
 		response.Error(c, 405, "METHOD_NOT_ALLOWED", "HTTP method is not supported on this endpoint", nil)
+	})
+
+	// Swagger & OpenAPI Documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/docs", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/swagger/index.html")
 	})
 
 	// API v1 Route Group
