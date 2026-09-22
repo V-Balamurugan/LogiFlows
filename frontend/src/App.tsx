@@ -6,12 +6,21 @@ import {
   RefreshCw, 
   Zap, 
   Boxes, 
-  Sparkles,
-  Terminal
+  Sparkles, 
+  Terminal,
+  Building,
+  Building2,
+  Users,
+  Truck,
+  Activity
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { TopNav } from './components/auth/TopNav';
+import { CompanyProfile } from './components/tenants/CompanyProfile';
+import { BranchList } from './components/resources/BranchList';
+import { EmployeeList } from './components/resources/EmployeeList';
+import { VehicleList } from './components/resources/VehicleList';
 
 interface BackendReadiness {
   status: string;
@@ -756,7 +765,8 @@ export default function App() {
 }
 
 function MainLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, activeTenant } = useAuth();
+  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'branches' | 'employees' | 'fleet'>('overview');
 
   if (isLoading) {
     return (
@@ -774,9 +784,176 @@ function MainLayout() {
   }
 
   return (
-    <div>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <TopNav />
-      <Dashboard />
+
+      {/* Primary Module Navigation Tabs */}
+      <nav style={{
+        background: 'rgba(15, 23, 42, 0.65)',
+        borderBottom: '1px solid var(--border-subtle)',
+        padding: '0 2rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '2rem',
+        backdropFilter: 'blur(8px)',
+        position: 'sticky',
+        top: '61px',
+        zIndex: 90,
+      }}>
+        <button
+          onClick={() => setActiveTab('overview')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'overview' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'overview' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'overview' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Activity size={17} />
+          Telemetry & AI Hub
+        </button>
+
+        <button
+          onClick={() => setActiveTab('company')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'company' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'company' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'company' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Building size={17} />
+          Company & Team
+        </button>
+
+        <button
+          onClick={() => setActiveTab('branches')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'branches' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'branches' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'branches' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Building2 size={17} />
+          Branches & Hubs
+        </button>
+
+        <button
+          onClick={() => setActiveTab('employees')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'employees' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'employees' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'employees' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Users size={17} />
+          Employees & Drivers
+        </button>
+
+        <button
+          onClick={() => setActiveTab('fleet')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'fleet' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'fleet' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'fleet' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Truck size={17} />
+          Fleet Vehicles
+        </button>
+      </nav>
+
+      {/* View Content */}
+      <main style={{ flex: 1, padding: '1.5rem 2rem' }}>
+        {activeTab === 'overview' && <Dashboard />}
+
+        {activeTab === 'company' && (
+          activeTenant ? (
+            <CompanyProfile 
+              tenantId={activeTenant.id} 
+              userRole={activeTenant.role} 
+            />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to view company details.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'branches' && (
+          activeTenant ? (
+            <BranchList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage branches.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'employees' && (
+          activeTenant ? (
+            <EmployeeList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage staff and drivers.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'fleet' && (
+          activeTenant ? (
+            <VehicleList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage fleet vehicles.</p>
+            </div>
+          )
+        )}
+      </main>
     </div>
   );
 }
+

@@ -133,9 +133,156 @@ export const api = {
       body: JSON.stringify({ email, role }),
     }),
 
+  getTenant: (tenantId: string) =>
+    request<{ id: string; name: string; slug: string; status: string; contact_email: string; created_at?: string }>(`/tenants/${tenantId}`, {
+      method: 'GET',
+    }),
+
+  getCurrentTenant: () =>
+    request<{ id: string; name: string; slug: string; status: string; contact_email: string; created_at?: string }>('/tenants/current', {
+      method: 'GET',
+    }),
+
   updateTenant: (tenantId: string, payload: { name?: string; contact_email?: string }) =>
     request<{ id: string; name: string; slug: string; status: string; contact_email: string }>(`/tenants/${tenantId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+
+  // Branches
+  listBranches: (tenantId: string, params?: { search?: string; status?: string; page?: number; limit?: number; near_lat?: number; near_lng?: number; radius_km?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.status) query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.near_lat !== undefined) query.set('near_lat', String(params.near_lat));
+    if (params?.near_lng !== undefined) query.set('near_lng', String(params.near_lng));
+    if (params?.radius_km !== undefined) query.set('radius_km', String(params.radius_km));
+
+    const qs = query.toString();
+    const endpoint = `/tenants/${tenantId}/branches${qs ? `?${qs}` : ''}`;
+    return request<{ branches: import('../types/resources').Branch[]; total: number; page: number; limit: number }>(endpoint, {
+      method: 'GET',
+    });
+  },
+
+  getBranch: (tenantId: string, branchId: string) =>
+    request<import('../types/resources').Branch>(`/tenants/${tenantId}/branches/${branchId}`, {
+      method: 'GET',
+    }),
+
+  createBranch: (tenantId: string, payload: import('../types/resources').CreateBranchPayload) =>
+    request<import('../types/resources').Branch>(`/tenants/${tenantId}/branches`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateBranch: (tenantId: string, branchId: string, payload: Partial<import('../types/resources').CreateBranchPayload> & { status?: string }) =>
+    request<import('../types/resources').Branch>(`/tenants/${tenantId}/branches/${branchId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  updateBranchStatus: (tenantId: string, branchId: string, status: string) =>
+    request<import('../types/resources').Branch>(`/tenants/${tenantId}/branches/${branchId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  deleteBranch: (tenantId: string, branchId: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}/branches/${branchId}`, {
+      method: 'DELETE',
+    }),
+
+  // Employees
+  listEmployees: (tenantId: string, params?: { search?: string; operational_role?: string; branch_id?: string; status?: string; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.operational_role) query.set('operational_role', params.operational_role);
+    if (params?.branch_id) query.set('branch_id', params.branch_id);
+    if (params?.status) query.set('status', params.status);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+
+    const qs = query.toString();
+    const endpoint = `/tenants/${tenantId}/employees${qs ? `?${qs}` : ''}`;
+    return request<import('../types/resources').EmployeeListResponse>(endpoint, {
+      method: 'GET',
+    });
+  },
+
+  getEmployee: (tenantId: string, employeeId: string) =>
+    request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees/${employeeId}`, {
+      method: 'GET',
+    }),
+
+  createEmployee: (tenantId: string, payload: import('../types/resources').CreateEmployeePayload) =>
+    request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateEmployee: (tenantId: string, employeeId: string, payload: Partial<import('../types/resources').CreateEmployeePayload> & { status?: string }) =>
+    request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees/${employeeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteEmployee: (tenantId: string, employeeId: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}/employees/${employeeId}`, {
+      method: 'DELETE',
+    }),
+
+  // Vehicles & Fleet Operations
+  listVehicles: (tenantId: string, params?: { search?: string; vehicle_type?: string; branch_id?: string; status?: string; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.vehicle_type) query.set('vehicle_type', params.vehicle_type);
+    if (params?.branch_id) query.set('branch_id', params.branch_id);
+    if (params?.status) query.set('status', params.status);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+
+    const qs = query.toString();
+    const endpoint = `/tenants/${tenantId}/vehicles${qs ? `?${qs}` : ''}`;
+    return request<import('../types/resources').VehicleListResponse>(endpoint, {
+      method: 'GET',
+    });
+  },
+
+  getVehicle: (tenantId: string, vehicleId: string) =>
+    request<import('../types/resources').Vehicle>(`/tenants/${tenantId}/vehicles/${vehicleId}`, {
+      method: 'GET',
+    }),
+
+  createVehicle: (tenantId: string, payload: import('../types/resources').CreateVehiclePayload) =>
+    request<import('../types/resources').Vehicle>(`/tenants/${tenantId}/vehicles`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateVehicle: (tenantId: string, vehicleId: string, payload: Partial<import('../types/resources').CreateVehiclePayload> & { status?: string }) =>
+    request<import('../types/resources').Vehicle>(`/tenants/${tenantId}/vehicles/${vehicleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteVehicle: (tenantId: string, vehicleId: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}/vehicles/${vehicleId}`, {
+      method: 'DELETE',
+    }),
+
+  assignVehicle: (tenantId: string, vehicleId: string, driverId: string, notes?: string) =>
+    request<{ id: string; status: string }>(`/tenants/${tenantId}/vehicles/${vehicleId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ driver_id: driverId, notes }),
+    }),
+
+  unassignVehicle: (tenantId: string, vehicleId: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}/vehicles/${vehicleId}/unassign`, {
+      method: 'POST',
+    }),
 };
+
+
