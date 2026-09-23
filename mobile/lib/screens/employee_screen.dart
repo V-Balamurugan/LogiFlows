@@ -102,7 +102,7 @@ class _EmployeeScreenState extends State<EmployeeScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
               title: Text(
@@ -162,7 +162,8 @@ class _EmployeeScreenState extends State<EmployeeScreen> {
                       );
                       if (ctx.mounted) Navigator.of(ctx).pop(true);
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      if (!dialogCtx.mounted) return;
+                      ScaffoldMessenger.of(dialogCtx).showSnackBar(
                         SnackBar(content: Text('Failed to update status: $e')),
                       );
                     }

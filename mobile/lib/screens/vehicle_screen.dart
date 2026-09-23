@@ -111,11 +111,13 @@ class _VehicleScreenState extends State<VehicleScreen> {
     if (confirm == true) {
       try {
         await _apiClient.unassignVehicle(widget.tenantId, vehicle.id);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Driver unassigned successfully')),
         );
         _fetchVehicles();
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Unassignment failed: $e')),
         );
@@ -195,12 +197,14 @@ class _VehicleScreenState extends State<VehicleScreen> {
 
       if (selectedDriver != null) {
         await _apiClient.assignVehicle(widget.tenantId, vehicle.id, selectedDriver.id);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Assigned ${selectedDriver.fullName} to ${vehicle.registrationNumber}')),
         );
         _fetchVehicles();
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Assignment failed: $e')),
       );
