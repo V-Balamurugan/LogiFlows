@@ -44,6 +44,27 @@ func RunUp(ctx context.Context, dsn string, log *slog.Logger) error {
 	return nil
 }
 
+// RunDown rolls back the most recent SQL migration.
+func RunDown(ctx context.Context, dsn string, log *slog.Logger) error {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to open database for rollback: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("database ping failed before rollback: %w", err)
+	}
+
+	log.Info("Executing database rollback...")
+	if err := goose.DownContext(ctx, db, "."); err != nil {
+		return fmt.Errorf("rollback failed: %w", err)
+	}
+
+	log.Info("Database rollback completed successfully")
+	return nil
+}
+
 // RunStatus checks and logs migration status.
 func RunStatus(ctx context.Context, dsn string) error {
 	db, err := sql.Open("pgx", dsn)
