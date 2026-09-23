@@ -8,12 +8,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/logiflows/logiflows/backend/internal/audit"
+	"github.com/logiflows/logiflows/backend/internal/auth"
+	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
+	"github.com/logiflows/logiflows/backend/internal/memberships"
+	"github.com/logiflows/logiflows/backend/internal/middleware"
 	"github.com/logiflows/logiflows/backend/internal/redis"
 	"github.com/logiflows/logiflows/backend/internal/server"
+	"github.com/logiflows/logiflows/backend/internal/tenants"
+	"github.com/logiflows/logiflows/backend/internal/users"
+	"github.com/logiflows/logiflows/backend/internal/vehicles"
 	"github.com/logiflows/logiflows/backend/migrations"
 )
 
@@ -82,9 +91,48 @@ func main() {
 	}()
 	log.Info("Redis connection established successfully")
 
-	// 7. Setup Handlers and Router
+	// 7. Setup Repositories, Services, and Handlers
+	userRepo := users.NewRepository(db.Pool())
+	tenantRepo := tenants.NewRepository(db.Pool())
+	membershipRepo := memberships.NewRepository(db.Pool())
+	auditRepo := audit.NewRepository(db.Pool())
+
+	tokenRepo := auth.NewRefreshTokenRepository(db.Pool())
+	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
+	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
+	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
+
 	healthHandler := health.NewHandler(db, cache)
-	router := server.SetupRouter(cfg, log, healthHandler)
+	authHandler := auth.NewHandler(authService)
+	tenantHandler := tenants.NewHandler(tenantService)
+
+	branchRepo := branches.NewRepository(db.Pool())
+	branchService := branches.NewService(branchRepo, auditRepo)
+	branchHandler := branches.NewHandler(branchService)
+
+	employeeRepo := employees.NewRepository(db.Pool())
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo, userRepo, membershipRepo)
+	employeeHandler := employees.NewHandler(employeeService)
+
+	vehicleRepo := vehicles.NewRepository(db.Pool())
+	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
+	vehicleHandler := vehicles.NewHandler(vehicleService)
+
+	authMiddleware := middleware.Auth(tokenService, userRepo)
+	tenantMiddleware := middleware.TenantContext(membershipRepo, tenantRepo)
+
+	router := server.SetupRouter(server.RouterParams{
+		Cfg:              cfg,
+		Log:              log,
+		HealthHandler:    healthHandler,
+		AuthHandler:      authHandler,
+		TenantHandler:    tenantHandler,
+		BranchHandler:    branchHandler,
+		EmployeeHandler:  employeeHandler,
+		VehicleHandler:   vehicleHandler,
+		AuthMiddleware:   authMiddleware,
+		TenantMiddleware: tenantMiddleware,
+	})
 
 	// 8. Initialize HTTP Server
 	srv := server.New(cfg, log, router)
