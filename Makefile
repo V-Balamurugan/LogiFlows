@@ -39,3 +39,9 @@ lint: ## Run Go static analysis (vet)
 
 build: ## Build backend binary
 	cd backend && go build -v -o bin/api.exe ./cmd/api
+
+run-all: ## Run the entire project (backend, ai-service, frontend, mobile)
+	powershell -NoProfile -ExecutionPolicy Bypass -File ./run-all.ps1
+
+stop-all: ## Stop all running LogiFlows services
+	powershell -NoProfile -ExecutionPolicy Bypass -File ./stop-all.ps1

@@ -12,7 +12,7 @@ export interface TenantSummary {
   id: string;
   name: string;
   slug: string;
-  role: 'PLATFORM_ADMIN' | 'TENANT_ADMIN' | 'TENANT_OPERATOR' | 'VIEWER';
+  role: 'PLATFORM_ADMIN' | 'TENANT_ADMIN' | 'TENANT_OPERATOR' | 'VIEWER' | 'EMPLOYEE';
 }
 
 export interface AuthResponse {

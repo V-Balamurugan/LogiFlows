@@ -124,43 +124,50 @@ func SetupRouter(params RouterParams) *gin.Engine {
 										branchRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin), params.BranchHandler.Create)
 										branchRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.BranchHandler.List)
 										branchRoutes.GET("/:branch_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.BranchHandler.Get)
+										branchRoutes.GET("/:branch_id/employees", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.BranchHandler.GetBranchEmployees)
+										branchRoutes.GET("/:branch_id/vehicles", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.BranchHandler.GetBranchVehicles)
 										branchRoutes.PATCH("/:branch_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.BranchHandler.Update)
 										branchRoutes.PATCH("/:branch_id/status", middleware.RequireRole(memberships.RoleTenantAdmin), params.BranchHandler.UpdateStatus)
 										branchRoutes.DELETE("/:branch_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.BranchHandler.Delete)
 									}
 								}
-							}
-						}
 
-						tenantScoped := authed.Group("/tenants/:tenant_id")
-						tenantScoped.Use(params.TenantMiddleware)
-						{
-
-							// Employee Operations
-							if params.EmployeeHandler != nil {
-								empRoutes := tenantScoped.Group("/employees")
-								{
-									empRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Create)
-									empRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.List)
-									empRoutes.GET("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.Get)
-									empRoutes.PUT("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Update)
-									empRoutes.PATCH("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Update)
-									empRoutes.DELETE("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Deactivate)
+								// Employee Operations
+								if params.EmployeeHandler != nil {
+									empRoutes := tenantScoped.Group("/employees")
+									{
+										empRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Create)
+										empRoutes.POST("/with-account", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.CreateWithAccount)
+										empRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.List)
+										empRoutes.GET("/me", params.EmployeeHandler.GetMyProfile)
+										empRoutes.GET("/available-drivers", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.ListAvailableDrivers)
+										empRoutes.GET("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.Get)
+										empRoutes.GET("/:employee_id/account-status", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.EmployeeHandler.GetAccountStatus)
+										empRoutes.PUT("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Update)
+										empRoutes.PATCH("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Update)
+										empRoutes.PATCH("/:employee_id/status", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.EmployeeHandler.UpdateStatus)
+										empRoutes.DELETE("/:employee_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.EmployeeHandler.Deactivate)
+									}
 								}
-							}
 
-							// Vehicle Fleet Operations
-							if params.VehicleHandler != nil {
-								vehRoutes := tenantScoped.Group("/vehicles")
-								{
-									vehRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Create)
-									vehRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.List)
-									vehRoutes.GET("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.Get)
-									vehRoutes.PUT("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Update)
-									vehRoutes.PATCH("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Update)
-									vehRoutes.DELETE("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Deactivate)
-									vehRoutes.POST("/:vehicle_id/assign", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.AssignDriver)
-									vehRoutes.POST("/:vehicle_id/unassign", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.UnassignDriver)
+								// Vehicle Fleet Operations
+								if params.VehicleHandler != nil {
+									vehRoutes := tenantScoped.Group("/vehicles")
+									{
+										vehRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.Create)
+										vehRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.List)
+										vehRoutes.GET("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.Get)
+										vehRoutes.PUT("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Update)
+										vehRoutes.PATCH("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.Update)
+										vehRoutes.PATCH("/:vehicle_id/status", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.UpdateStatus)
+										vehRoutes.DELETE("/:vehicle_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.VehicleHandler.Deactivate)
+										vehRoutes.POST("/:vehicle_id/assign", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.AssignDriver)
+										vehRoutes.POST("/:vehicle_id/unassign", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.VehicleHandler.UnassignDriver)
+										vehRoutes.GET("/:vehicle_id/assignments", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.GetVehicleAssignments)
+									}
+
+									// Fleet Assignments Listing
+									tenantScoped.GET("/assignments", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.ListAssignments)
 								}
 							}
 						}

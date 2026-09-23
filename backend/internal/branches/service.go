@@ -16,6 +16,8 @@ type Service interface {
 	ListBranches(ctx context.Context, tenantID uuid.UUID, filter BranchFilter) (*BranchListResponse, error)
 	UpdateBranch(ctx context.Context, tenantID, branchID, userID uuid.UUID, req UpdateBranchRequest, ip, userAgent string) (*Branch, error)
 	DeactivateBranch(ctx context.Context, tenantID, branchID, userID uuid.UUID, ip, userAgent string) error
+	GetBranchEmployees(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchEmployeeSummary, error)
+	GetBranchVehicles(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchVehicleSummary, error)
 }
 
 type branchService struct {
@@ -228,4 +230,28 @@ func (s *branchService) DeactivateBranch(ctx context.Context, tenantID, branchID
 	}
 
 	return nil
+}
+
+func (s *branchService) GetBranchEmployees(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchEmployeeSummary, error) {
+	branch, err := s.repo.GetByID(ctx, tenantID, branchID)
+	if err != nil {
+		return nil, err
+	}
+	if branch == nil {
+		return nil, ErrBranchNotFound
+	}
+
+	return s.repo.ListBranchEmployees(ctx, tenantID, branchID)
+}
+
+func (s *branchService) GetBranchVehicles(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchVehicleSummary, error) {
+	branch, err := s.repo.GetByID(ctx, tenantID, branchID)
+	if err != nil {
+		return nil, err
+	}
+	if branch == nil {
+		return nil, ErrBranchNotFound
+	}
+
+	return s.repo.ListBranchVehicles(ctx, tenantID, branchID)
 }

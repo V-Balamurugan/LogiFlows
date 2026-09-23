@@ -54,7 +54,8 @@ func (h *Handler) Create(c *gin.Context) {
 		}
 		if errors.Is(err, ErrInvalidRegistrationNumber) ||
 			errors.Is(err, ErrInvalidVehicleType) ||
-			errors.Is(err, ErrInvalidCapacity) {
+			errors.Is(err, ErrInvalidCapacity) ||
+			errors.Is(err, ErrInvalidAvailabilityStatus) {
 			response.BadRequest(c, err.Error(), nil)
 			return
 		}
@@ -105,6 +106,7 @@ func (h *Handler) List(c *gin.Context) {
 	search := c.Query("search")
 	vehicleType := c.Query("vehicle_type")
 	status := c.Query("status")
+	availabilityStatus := c.Query("availability_status")
 
 	var branchID *uuid.UUID
 	if bStr := c.Query("branch_id"); bStr != "" {
@@ -128,12 +130,13 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	filter := VehicleFilter{
-		Search:      search,
-		VehicleType: vehicleType,
-		Status:      status,
-		BranchID:    branchID,
-		Limit:       limit,
-		Offset:      offset,
+		Search:             search,
+		VehicleType:        vehicleType,
+		Status:             status,
+		AvailabilityStatus: availabilityStatus,
+		BranchID:           branchID,
+		Limit:              limit,
+		Offset:             offset,
 	}
 
 	resp, err := h.service.ListVehicles(c.Request.Context(), tenantID, filter)
@@ -145,7 +148,7 @@ func (h *Handler) List(c *gin.Context) {
 	response.Success(c, http.StatusOK, resp)
 }
 
-// Update handles PUT /api/v1/tenants/:tenant_id/vehicles/:vehicle_id
+// Update handles PUT and PATCH /api/v1/tenants/:tenant_id/vehicles/:vehicle_id
 func (h *Handler) Update(c *gin.Context) {
 	tenantID, ok := contextutil.GetTenantID(c)
 	if !ok {
@@ -185,12 +188,60 @@ func (h *Handler) Update(c *gin.Context) {
 			response.BadRequest(c, "Assigned branch does not exist or is inactive", nil)
 			return
 		}
-		if errors.Is(err, ErrInvalidVehicleType) || errors.Is(err, ErrInvalidCapacity) {
+		if errors.Is(err, ErrInvalidVehicleType) || errors.Is(err, ErrInvalidCapacity) || errors.Is(err, ErrInvalidStatus) || errors.Is(err, ErrInvalidAvailabilityStatus) {
 			response.BadRequest(c, err.Error(), nil)
 			return
 		}
 
 		response.InternalServerError(c, "Failed to update fleet vehicle")
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+// UpdateStatus handles PATCH /api/v1/tenants/:tenant_id/vehicles/:vehicle_id/status
+func (h *Handler) UpdateStatus(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Target tenant ID is required", nil)
+		return
+	}
+
+	userID, ok := contextutil.GetUserID(c)
+	if !ok {
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	vehicleIDStr := c.Param("vehicle_id")
+	vehicleID, err := uuid.Parse(vehicleIDStr)
+	if err != nil {
+		response.BadRequest(c, "Invalid vehicle UUID format", nil)
+		return
+	}
+
+	var req UpdateVehicleStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid vehicle status update payload", err.Error())
+		return
+	}
+
+	ip := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	v, err := h.service.UpdateVehicleStatus(c.Request.Context(), tenantID, vehicleID, userID, req, ip, userAgent)
+	if err != nil {
+		if errors.Is(err, ErrVehicleNotFound) {
+			response.NotFound(c, "Vehicle not found")
+			return
+		}
+		if errors.Is(err, ErrInvalidStatus) || errors.Is(err, ErrInvalidAvailabilityStatus) {
+			response.BadRequest(c, err.Error(), nil)
+			return
+		}
+
+		response.InternalServerError(c, "Failed to update vehicle status")
 		return
 	}
 
@@ -279,6 +330,10 @@ func (h *Handler) AssignDriver(c *gin.Context) {
 			response.BadRequest(c, "Assigned driver was not found or is inactive", nil)
 			return
 		}
+		if errors.Is(err, ErrDriverNotEligible) {
+			response.BadRequest(c, "Driver is not eligible for assignment (must have DRIVER operational role and be ACTIVE and AVAILABLE)", nil)
+			return
+		}
 		if errors.Is(err, ErrVehicleNotFound) {
 			response.NotFound(c, "Vehicle not found")
 			return
@@ -326,5 +381,98 @@ func (h *Handler) UnassignDriver(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, gin.H{
 		"message": "Vehicle driver unassigned successfully",
+	})
+}
+
+// ListAssignments handles GET /api/v1/tenants/:tenant_id/assignments
+func (h *Handler) ListAssignments(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Target tenant ID is required", nil)
+		return
+	}
+
+	var vehicleID *uuid.UUID
+	if vStr := c.Query("vehicle_id"); vStr != "" {
+		if parsed, err := uuid.Parse(vStr); err == nil {
+			vehicleID = &parsed
+		}
+	}
+
+	var driverID *uuid.UUID
+	if dStr := c.Query("driver_id"); dStr != "" {
+		if parsed, err := uuid.Parse(dStr); err == nil {
+			driverID = &parsed
+		}
+	}
+
+	limit := 50
+	if lStr := c.Query("limit"); lStr != "" {
+		if l, err := strconv.Atoi(lStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	offset := 0
+	if oStr := c.Query("offset"); oStr != "" {
+		if o, err := strconv.Atoi(oStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	assignments, total, err := h.service.ListAssignments(c.Request.Context(), tenantID, vehicleID, driverID, limit, offset)
+	if err != nil {
+		response.InternalServerError(c, "Failed to query vehicle assignments")
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"assignments": assignments,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
+}
+
+// GetVehicleAssignments handles GET /api/v1/tenants/:tenant_id/vehicles/:vehicle_id/assignments
+func (h *Handler) GetVehicleAssignments(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Target tenant ID is required", nil)
+		return
+	}
+
+	vehicleIDStr := c.Param("vehicle_id")
+	vehicleID, err := uuid.Parse(vehicleIDStr)
+	if err != nil {
+		response.BadRequest(c, "Invalid vehicle UUID format", nil)
+		return
+	}
+
+	limit := 50
+	if lStr := c.Query("limit"); lStr != "" {
+		if l, err := strconv.Atoi(lStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	offset := 0
+	if oStr := c.Query("offset"); oStr != "" {
+		if o, err := strconv.Atoi(oStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	assignments, total, err := h.service.ListAssignments(c.Request.Context(), tenantID, &vehicleID, nil, limit, offset)
+	if err != nil {
+		response.InternalServerError(c, "Failed to query vehicle assignment history")
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"assignments": assignments,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
 	})
 }

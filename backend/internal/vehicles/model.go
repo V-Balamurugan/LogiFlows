@@ -26,6 +26,14 @@ const (
 	VehicleStatusDecommissioned = "DECOMMISSIONED"
 )
 
+// Allowed Vehicle Availability Statuses
+const (
+	AvailabilityStatusAvailable   = "AVAILABLE"
+	AvailabilityStatusAssigned    = "ASSIGNED"
+	AvailabilityStatusMaintenance = "MAINTENANCE"
+	AvailabilityStatusUnavailable = "UNAVAILABLE"
+)
+
 // Allowed Vehicle Assignment Statuses
 const (
 	AssignmentStatusActive    = "ACTIVE"
@@ -37,11 +45,14 @@ var (
 	ErrInvalidRegistrationNumber   = errors.New("registration_number is required and must be between 2 and 50 characters")
 	ErrInvalidVehicleType          = errors.New("invalid vehicle_type; must be ELECTRIC_VAN, VAN, MOTORCYCLE, TRUCK, or THREE_WHEELER")
 	ErrInvalidCapacity             = errors.New("max_weight_kg and max_volume_cbm must be strictly greater than 0")
+	ErrInvalidStatus               = errors.New("invalid status; must be AVAILABLE, ASSIGNED, IN_TRANSIT, MAINTENANCE, or DECOMMISSIONED")
+	ErrInvalidAvailabilityStatus   = errors.New("invalid availability_status; must be AVAILABLE, ASSIGNED, MAINTENANCE, or UNAVAILABLE")
 	ErrDuplicateRegistrationNumber = errors.New("vehicle with this registration number already exists in this tenant organization")
 	ErrVehicleNotFound             = errors.New("vehicle not found")
 	ErrVehicleAlreadyAssigned      = errors.New("vehicle is already actively assigned to another driver")
 	ErrDriverAlreadyAssigned       = errors.New("driver is already actively assigned to another vehicle")
 	ErrDriverNotFound              = errors.New("driver not found or is inactive")
+	ErrDriverNotEligible           = errors.New("employee must have operational role DRIVER and be currently ACTIVE and AVAILABLE")
 	ErrBranchNotFound              = errors.New("assigned branch not found or is inactive")
 	ErrBranchCrossTenant           = errors.New("cannot associate vehicle with branch belonging to another organization")
 	ErrAssignmentNotFound          = errors.New("active vehicle assignment not found")
@@ -58,9 +69,11 @@ type Vehicle struct {
 	MaxWeightKG        float64    `json:"max_weight_kg" db:"max_weight_kg"`
 	MaxVolumeCBM       float64    `json:"max_volume_cbm" db:"max_volume_cbm"`
 	Status             string     `json:"status" db:"status"`
+	AvailabilityStatus string     `json:"availability_status" db:"availability_status"`
 	IsActive           bool       `json:"is_active" db:"is_active"`
 	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt          *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 
 	// Joined details for rich client telemetry & UI
 	BranchName        *string    `json:"branch_name,omitempty" db:"branch_name"`
@@ -85,6 +98,7 @@ type VehicleAssignment struct {
 	// Joined metadata
 	RegistrationNumber *string `json:"registration_number,omitempty" db:"registration_number"`
 	DriverName         *string `json:"driver_name,omitempty" db:"driver_name"`
+	DriverCode         *string `json:"driver_code,omitempty" db:"driver_code"`
 }
 
 type CreateVehicleRequest struct {
@@ -94,6 +108,7 @@ type CreateVehicleRequest struct {
 	Year               *int       `json:"year,omitempty"`
 	MaxWeightKG        float64    `json:"max_weight_kg"`
 	MaxVolumeCBM       float64    `json:"max_volume_cbm"`
+	AvailabilityStatus string     `json:"availability_status,omitempty"`
 	BranchID           *uuid.UUID `json:"branch_id,omitempty"`
 }
 
@@ -117,17 +132,29 @@ func (r *CreateVehicleRequest) ValidateAndSanitize() error {
 		r.MaxVolumeCBM = 3.0
 	}
 
+	if r.AvailabilityStatus == "" {
+		r.AvailabilityStatus = AvailabilityStatusAvailable
+	} else {
+		r.AvailabilityStatus = strings.ToUpper(strings.TrimSpace(r.AvailabilityStatus))
+		switch r.AvailabilityStatus {
+		case AvailabilityStatusAvailable, AvailabilityStatusAssigned, AvailabilityStatusMaintenance, AvailabilityStatusUnavailable:
+		default:
+			return ErrInvalidAvailabilityStatus
+		}
+	}
+
 	return nil
 }
 
 type UpdateVehicleRequest struct {
-	VehicleType  *string    `json:"vehicle_type,omitempty"`
-	MakeModel    *string    `json:"make_model,omitempty"`
-	Year         *int       `json:"year,omitempty"`
-	MaxWeightKG  *float64   `json:"max_weight_kg,omitempty"`
-	MaxVolumeCBM *float64   `json:"max_volume_cbm,omitempty"`
-	BranchID     *uuid.UUID `json:"branch_id,omitempty"`
-	Status       *string    `json:"status,omitempty"`
+	VehicleType        *string    `json:"vehicle_type,omitempty"`
+	MakeModel          *string    `json:"make_model,omitempty"`
+	Year               *int       `json:"year,omitempty"`
+	MaxWeightKG        *float64   `json:"max_weight_kg,omitempty"`
+	MaxVolumeCBM       *float64   `json:"max_volume_cbm,omitempty"`
+	BranchID           *uuid.UUID `json:"branch_id,omitempty"`
+	Status             *string    `json:"status,omitempty"`
+	AvailabilityStatus *string    `json:"availability_status,omitempty"`
 }
 
 func (r *UpdateVehicleRequest) ValidateAndSanitize() error {
@@ -147,7 +174,17 @@ func (r *UpdateVehicleRequest) ValidateAndSanitize() error {
 		case VehicleStatusAvailable, VehicleStatusAssigned, VehicleStatusInTransit, VehicleStatusMaintenance, VehicleStatusDecommissioned:
 			*r.Status = st
 		default:
-			return errors.New("invalid status; must be AVAILABLE, ASSIGNED, IN_TRANSIT, MAINTENANCE, or DECOMMISSIONED")
+			return ErrInvalidStatus
+		}
+	}
+
+	if r.AvailabilityStatus != nil {
+		av := strings.ToUpper(strings.TrimSpace(*r.AvailabilityStatus))
+		switch av {
+		case AvailabilityStatusAvailable, AvailabilityStatusAssigned, AvailabilityStatusMaintenance, AvailabilityStatusUnavailable:
+			*r.AvailabilityStatus = av
+		default:
+			return ErrInvalidAvailabilityStatus
 		}
 	}
 
@@ -161,16 +198,50 @@ func (r *UpdateVehicleRequest) ValidateAndSanitize() error {
 	return nil
 }
 
+type UpdateVehicleStatusRequest struct {
+	Status             *string `json:"status,omitempty"`
+	AvailabilityStatus *string `json:"availability_status,omitempty"`
+}
+
+func (r *UpdateVehicleStatusRequest) ValidateAndSanitize() error {
+	if r.Status != nil {
+		st := strings.ToUpper(strings.TrimSpace(*r.Status))
+		switch st {
+		case VehicleStatusAvailable, VehicleStatusAssigned, VehicleStatusInTransit, VehicleStatusMaintenance, VehicleStatusDecommissioned:
+			*r.Status = st
+		default:
+			return ErrInvalidStatus
+		}
+	}
+
+	if r.AvailabilityStatus != nil {
+		av := strings.ToUpper(strings.TrimSpace(*r.AvailabilityStatus))
+		switch av {
+		case AvailabilityStatusAvailable, AvailabilityStatusAssigned, AvailabilityStatusMaintenance, AvailabilityStatusUnavailable:
+			*r.AvailabilityStatus = av
+		default:
+			return ErrInvalidAvailabilityStatus
+		}
+	}
+
+	if r.Status == nil && r.AvailabilityStatus == nil {
+		return errors.New("at least one of status or availability_status must be provided")
+	}
+
+	return nil
+}
+
 type AssignVehicleRequest struct {
 	DriverID uuid.UUID `json:"driver_id" binding:"required"`
 	Notes    *string   `json:"notes,omitempty"`
 }
 
 type VehicleFilter struct {
-	Search      string
-	VehicleType string
-	Status      string
-	BranchID    *uuid.UUID
-	Limit       int
-	Offset      int
+	Search             string
+	VehicleType        string
+	Status             string
+	AvailabilityStatus string
+	BranchID           *uuid.UUID
+	Limit              int
+	Offset             int
 }

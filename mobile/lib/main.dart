@@ -3,6 +3,7 @@ import 'screens/login_screen.dart';
 import 'screens/company_screen.dart';
 import 'screens/branch_screen.dart';
 import 'screens/vehicle_screen.dart';
+import 'screens/employee_screen.dart';
 import 'services/auth_api_client.dart';
 import 'core/token_storage.dart';
 
@@ -137,6 +138,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
       CompanyScreen(tenantId: _tenantId),
       BranchScreen(tenantId: _tenantId),
       VehicleScreen(tenantId: _tenantId),
+      EmployeeScreen(tenantId: _tenantId),
     ];
 
     return Scaffold(
@@ -173,6 +175,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             icon: Icon(Icons.directions_car_outlined),
             selectedIcon: Icon(Icons.directions_car, color: Color(0xFF38BDF8)),
             label: 'Fleet',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.badge_outlined),
+            selectedIcon: Icon(Icons.badge, color: Color(0xFF38BDF8)),
+            label: 'Staff',
           ),
         ],
       ),

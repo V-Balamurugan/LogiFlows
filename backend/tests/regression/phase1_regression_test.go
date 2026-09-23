@@ -72,7 +72,7 @@ func setupRegressionRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
 	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
 	branchService := branches.NewService(branchRepo, auditRepo)
-	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo)
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo, userRepo, membershipRepo)
 	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
 
 	authHandler := auth.NewHandler(authService)

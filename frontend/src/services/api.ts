@@ -195,6 +195,16 @@ export const api = {
       method: 'DELETE',
     }),
 
+  getBranchEmployees: (tenantId: string, branchId: string) =>
+    request<{ employees: import('../types/resources').BranchEmployeeSummary[]; total: number }>(`/tenants/${tenantId}/branches/${branchId}/employees`, {
+      method: 'GET',
+    }),
+
+  getBranchVehicles: (tenantId: string, branchId: string) =>
+    request<{ vehicles: import('../types/resources').BranchVehicleSummary[]; total: number }>(`/tenants/${tenantId}/branches/${branchId}/vehicles`, {
+      method: 'GET',
+    }),
+
   // Employees
   listEmployees: (tenantId: string, params?: { search?: string; operational_role?: string; branch_id?: string; status?: string; limit?: number; offset?: number }) => {
     const query = new URLSearchParams();
@@ -223,6 +233,22 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  createEmployeeWithAccount: (tenantId: string, payload: import('../types/resources').CreateEmployeeWithAccountPayload) =>
+    request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees/with-account`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getEmployeeAccountStatus: (tenantId: string, employeeId: string) =>
+    request<import('../types/resources').EmployeeAccountStatus>(`/tenants/${tenantId}/employees/${employeeId}/account-status`, {
+      method: 'GET',
+    }),
+
+  getMyProfile: (tenantId: string) =>
+    request<import('../types/resources').EmployeeMeResponse>(`/tenants/${tenantId}/employees/me`, {
+      method: 'GET',
+    }),
+
   updateEmployee: (tenantId: string, employeeId: string, payload: Partial<import('../types/resources').CreateEmployeePayload> & { status?: string }) =>
     request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees/${employeeId}`, {
       method: 'PUT',
@@ -233,6 +259,19 @@ export const api = {
     request<{ message: string }>(`/tenants/${tenantId}/employees/${employeeId}`, {
       method: 'DELETE',
     }),
+
+  updateEmployeeStatus: (tenantId: string, employeeId: string, payload: import('../types/resources').UpdateEmployeeStatusPayload) =>
+    request<import('../types/resources').Employee>(`/tenants/${tenantId}/employees/${employeeId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  listAvailableDrivers: (tenantId: string, branchId?: string) => {
+    const qs = branchId ? `?branch_id=${encodeURIComponent(branchId)}` : '';
+    return request<{ drivers: import('../types/resources').Employee[]; total: number }>(`/tenants/${tenantId}/employees/available-drivers${qs}`, {
+      method: 'GET',
+    });
+  },
 
   // Vehicles & Fleet Operations
   listVehicles: (tenantId: string, params?: { search?: string; vehicle_type?: string; branch_id?: string; status?: string; limit?: number; offset?: number }) => {
@@ -268,6 +307,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  updateVehicleStatus: (tenantId: string, vehicleId: string, payload: import('../types/resources').UpdateVehicleStatusPayload) =>
+    request<import('../types/resources').Vehicle>(`/tenants/${tenantId}/vehicles/${vehicleId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
   deleteVehicle: (tenantId: string, vehicleId: string) =>
     request<{ message: string }>(`/tenants/${tenantId}/vehicles/${vehicleId}`, {
       method: 'DELETE',
@@ -283,6 +328,13 @@ export const api = {
     request<{ message: string }>(`/tenants/${tenantId}/vehicles/${vehicleId}/unassign`, {
       method: 'POST',
     }),
+
+  listAssignments: (tenantId: string, vehicleId?: string) => {
+    const qs = vehicleId ? `?vehicle_id=${encodeURIComponent(vehicleId)}` : '';
+    return request<{ assignments: import('../types/resources').DriverVehicleAssignment[]; total: number }>(`/tenants/${tenantId}/assignments${qs}`, {
+      method: 'GET',
+    });
+  },
 };
 
 

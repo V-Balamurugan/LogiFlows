@@ -40,7 +40,7 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	expectedTables := []string{"users", "tenants", "tenant_memberships", "audit_logs", "refresh_tokens"}
+	expectedTables := []string{"users", "tenants", "tenant_memberships", "audit_logs", "refresh_tokens", "branches", "employees", "vehicles", "vehicle_assignments", "tenant_employee_sequences"}
 	for _, table := range expectedTables {
 		var exists bool
 		query := `SELECT EXISTS (
@@ -67,6 +67,19 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 	if !emailVerifiedColExists {
 		t.Errorf("expected column email_verified to exist on users table")
 	}
+
+	// 4. Verify Phase 3 employee availability_status column exists
+	var empAvailColExists bool
+	empColQuery := `SELECT EXISTS (
+		SELECT FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'availability_status'
+	)`
+	if err := conn.QueryRow(ctx, empColQuery).Scan(&empAvailColExists); err != nil {
+		t.Fatalf("failed to query column existence for employees.availability_status: %v", err)
+	}
+	if !empAvailColExists {
+		t.Errorf("expected column availability_status to exist on employees table")
+	}
 }
 
 func TestMigrations_RollbackAndReapply(t *testing.T) {
@@ -85,7 +98,7 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 
 	log := logger.Init("test", "debug")
 
-	// 1. Rollback latest migration (00005_create_employees)
+	// 1. Rollback latest migration (00007_phase3_operational_resources)
 	defer func() {
 		_ = migrations.RunUp(context.Background(), cfg.Database.DSN(), log)
 	}()
@@ -100,29 +113,29 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Verify vehicles table is dropped after rollback of latest migration
-	var vehiclesExists bool
+	// Verify tenant_employee_sequences table is dropped after rollback of migration 00007
+	var seqTableExists bool
 	query := `SELECT EXISTS (
 		SELECT FROM information_schema.tables 
-		WHERE table_schema = 'public' AND table_name = 'vehicles'
+		WHERE table_schema = 'public' AND table_name = 'tenant_employee_sequences'
 	)`
-	if err := conn.QueryRow(ctx, query).Scan(&vehiclesExists); err != nil {
-		t.Fatalf("failed to check vehicles existence: %v", err)
+	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
+		t.Fatalf("failed to check tenant_employee_sequences existence: %v", err)
 	}
-	if vehiclesExists {
-		t.Errorf("expected vehicles table to be dropped after rollback")
+	if seqTableExists {
+		t.Errorf("expected tenant_employee_sequences table to be dropped after rollback")
 	}
 
-	// 2. Re-apply migration 00006
+	// 2. Re-apply migration 00007
 	if err := migrations.RunUp(ctx, cfg.Database.DSN(), log); err != nil {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Verify vehicles table is recreated
-	if err := conn.QueryRow(ctx, query).Scan(&vehiclesExists); err != nil {
-		t.Fatalf("failed to check vehicles re-creation: %v", err)
+	// Verify tenant_employee_sequences table is recreated
+	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
+		t.Fatalf("failed to check tenant_employee_sequences re-creation: %v", err)
 	}
-	if !vehiclesExists {
-		t.Errorf("expected vehicles table to exist after re-applying migration")
+	if !seqTableExists {
+		t.Errorf("expected tenant_employee_sequences table to exist after re-applying migration")
 	}
 }

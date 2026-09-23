@@ -24,6 +24,7 @@ type Service interface {
 	GetVehicle(ctx context.Context, tenantID, vehicleID uuid.UUID) (*Vehicle, error)
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, filter VehicleFilter) (*VehicleListResponse, error)
 	UpdateVehicle(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, req UpdateVehicleRequest, ip, userAgent string) (*Vehicle, error)
+	UpdateVehicleStatus(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, req UpdateVehicleStatusRequest, ip, userAgent string) (*Vehicle, error)
 	DeactivateVehicle(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, ip, userAgent string) error
 
 	AssignDriver(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, req AssignVehicleRequest, ip, userAgent string) (*VehicleAssignment, error)
@@ -81,6 +82,7 @@ func (s *vehicleService) CreateVehicle(ctx context.Context, tenantID, actorID uu
 		MaxWeightKG:        req.MaxWeightKG,
 		MaxVolumeCBM:       req.MaxVolumeCBM,
 		Status:             VehicleStatusAvailable,
+		AvailabilityStatus: req.AvailabilityStatus,
 		IsActive:           true,
 	}
 
@@ -109,6 +111,7 @@ func (s *vehicleService) CreateVehicle(ctx context.Context, tenantID, actorID uu
 				"registration_number": v.RegistrationNumber,
 				"vehicle_type":        v.VehicleType,
 				"branch_id":           v.BranchID,
+				"availability_status": v.AvailabilityStatus,
 			},
 		})
 	}
@@ -187,9 +190,14 @@ func (s *vehicleService) UpdateVehicle(ctx context.Context, tenantID, vehicleID,
 		existing.Status = *req.Status
 		if existing.Status == VehicleStatusDecommissioned {
 			existing.IsActive = false
+			existing.AvailabilityStatus = AvailabilityStatusUnavailable
 		} else {
 			existing.IsActive = true
 		}
+	}
+
+	if req.AvailabilityStatus != nil {
+		existing.AvailabilityStatus = *req.AvailabilityStatus
 	}
 
 	if err := s.repo.UpdateVehicle(ctx, existing); err != nil {
@@ -213,9 +221,45 @@ func (s *vehicleService) UpdateVehicle(ctx context.Context, tenantID, vehicleID,
 			UserAgent:    &userAgent,
 			Status:       audit.StatusSuccess,
 			Details: map[string]any{
-				"status":       updated.Status,
-				"vehicle_type": updated.VehicleType,
-				"branch_id":    updated.BranchID,
+				"status":              updated.Status,
+				"availability_status": updated.AvailabilityStatus,
+				"vehicle_type":        updated.VehicleType,
+				"branch_id":           updated.BranchID,
+			},
+		})
+	}
+
+	return updated, nil
+}
+
+func (s *vehicleService) UpdateVehicleStatus(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, req UpdateVehicleStatusRequest, ip, userAgent string) (*Vehicle, error) {
+	if err := req.ValidateAndSanitize(); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.UpdateVehicleStatus(ctx, tenantID, vehicleID, req); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.GetVehicleByID(ctx, tenantID, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.auditRepo != nil {
+		vIDStr := vehicleID.String()
+		_ = s.auditRepo.Log(ctx, &audit.AuditLog{
+			TenantID:     &tenantID,
+			UserID:       &actorID,
+			Action:       "vehicle.status_updated",
+			ResourceType: "vehicle",
+			ResourceID:   &vIDStr,
+			IPAddress:    &ip,
+			UserAgent:    &userAgent,
+			Status:       audit.StatusSuccess,
+			Details: map[string]any{
+				"status":              updated.Status,
+				"availability_status": updated.AvailabilityStatus,
 			},
 		})
 	}
@@ -233,6 +277,12 @@ func (s *vehicleService) DeactivateVehicle(ctx context.Context, tenantID, vehicl
 	activeAssignment, err := s.repo.GetActiveAssignmentByVehicle(ctx, tenantID, vehicleID)
 	if err == nil && activeAssignment != nil {
 		_ = s.repo.CompleteAssignment(ctx, tenantID, activeAssignment.ID)
+		if s.employeesRepo != nil {
+			avail := employees.AvailabilityStatusAvailable
+			_ = s.employeesRepo.UpdateStatus(ctx, tenantID, activeAssignment.DriverID, employees.UpdateEmployeeStatusRequest{
+				AvailabilityStatus: &avail,
+			})
+		}
 	}
 
 	if err := s.repo.DeactivateVehicle(ctx, tenantID, vehicleID); err != nil {
@@ -260,13 +310,13 @@ func (s *vehicleService) DeactivateVehicle(ctx context.Context, tenantID, vehicl
 }
 
 func (s *vehicleService) AssignDriver(ctx context.Context, tenantID, vehicleID, actorID uuid.UUID, req AssignVehicleRequest, ip, userAgent string) (*VehicleAssignment, error) {
-	// 1. Verify vehicle exists and is active
+	// 1. Verify vehicle exists and is active and operable
 	vehicle, err := s.repo.GetVehicleByID(ctx, tenantID, vehicleID)
 	if err != nil {
 		return nil, err
 	}
-	if !vehicle.IsActive || vehicle.Status == VehicleStatusDecommissioned {
-		return nil, errors.New("cannot assign an inactive or decommissioned vehicle")
+	if !vehicle.IsActive || vehicle.Status == VehicleStatusDecommissioned || vehicle.Status == VehicleStatusMaintenance {
+		return nil, errors.New("cannot assign an inactive, maintenance, or decommissioned vehicle")
 	}
 
 	// 2. Check if vehicle is already assigned
@@ -275,18 +325,24 @@ func (s *vehicleService) AssignDriver(ctx context.Context, tenantID, vehicleID, 
 		return nil, ErrVehicleAlreadyAssigned
 	}
 
-	// 3. Verify driver exists and is active in this tenant
+	// 3. Verify driver exists, has DRIVER role, is ACTIVE, and is AVAILABLE in this tenant
 	if s.employeesRepo != nil {
 		driver, err := s.employeesRepo.GetByID(ctx, tenantID, req.DriverID)
 		if err != nil || driver == nil {
 			return nil, ErrDriverNotFound
 		}
-		if !driver.IsActive {
-			return nil, ErrDriverNotFound
+		if !driver.IsActive || driver.Status != employees.StatusActive {
+			return nil, ErrDriverNotEligible
+		}
+		if driver.OperationalRole != employees.OperationalRoleDriver {
+			return nil, ErrDriverNotEligible
+		}
+		if driver.AvailabilityStatus != employees.AvailabilityStatusAvailable {
+			return nil, ErrDriverAlreadyAssigned
 		}
 	}
 
-	// 4. Check if driver is already assigned to another vehicle
+	// 4. Check if driver is already actively assigned to another vehicle
 	existingDriverAssign, err := s.repo.GetActiveAssignmentByDriver(ctx, tenantID, req.DriverID)
 	if err == nil && existingDriverAssign != nil {
 		return nil, ErrDriverAlreadyAssigned
@@ -305,8 +361,9 @@ func (s *vehicleService) AssignDriver(ctx context.Context, tenantID, vehicleID, 
 		return nil, err
 	}
 
-	// 5. Update vehicle status to ASSIGNED
+	// 5. Update vehicle status to ASSIGNED and availability to ASSIGNED
 	assignedStatus := VehicleStatusAssigned
+	assignedAvail := AvailabilityStatusAssigned
 	_ = s.repo.UpdateVehicle(ctx, &Vehicle{
 		ID:                 vehicle.ID,
 		TenantID:           tenantID,
@@ -318,8 +375,17 @@ func (s *vehicleService) AssignDriver(ctx context.Context, tenantID, vehicleID, 
 		MaxWeightKG:        vehicle.MaxWeightKG,
 		MaxVolumeCBM:       vehicle.MaxVolumeCBM,
 		Status:             assignedStatus,
+		AvailabilityStatus: assignedAvail,
 		IsActive:           true,
 	})
+
+	// 6. Update driver availability status to BUSY
+	if s.employeesRepo != nil {
+		busyStatus := employees.AvailabilityStatusBusy
+		_ = s.employeesRepo.UpdateStatus(ctx, tenantID, req.DriverID, employees.UpdateEmployeeStatusRequest{
+			AvailabilityStatus: &busyStatus,
+		})
+	}
 
 	if s.auditRepo != nil {
 		assignIDStr := assignment.ID.String()
@@ -352,10 +418,11 @@ func (s *vehicleService) UnassignDriver(ctx context.Context, tenantID, vehicleID
 		return err
 	}
 
-	// Update vehicle status back to AVAILABLE
+	// Update vehicle status and availability back to AVAILABLE
 	vehicle, err := s.repo.GetVehicleByID(ctx, tenantID, vehicleID)
 	if err == nil && vehicle != nil {
 		availableStatus := VehicleStatusAvailable
+		availableAvail := AvailabilityStatusAvailable
 		_ = s.repo.UpdateVehicle(ctx, &Vehicle{
 			ID:                 vehicle.ID,
 			TenantID:           tenantID,
@@ -367,7 +434,16 @@ func (s *vehicleService) UnassignDriver(ctx context.Context, tenantID, vehicleID
 			MaxWeightKG:        vehicle.MaxWeightKG,
 			MaxVolumeCBM:       vehicle.MaxVolumeCBM,
 			Status:             availableStatus,
+			AvailabilityStatus: availableAvail,
 			IsActive:           true,
+		})
+	}
+
+	// Restore driver availability status to AVAILABLE
+	if s.employeesRepo != nil {
+		availStatus := employees.AvailabilityStatusAvailable
+		_ = s.employeesRepo.UpdateStatus(ctx, tenantID, activeAssignment.DriverID, employees.UpdateEmployeeStatusRequest{
+			AvailabilityStatus: &availStatus,
 		})
 	}
 

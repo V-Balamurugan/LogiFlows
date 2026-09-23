@@ -20,6 +20,8 @@ type Repository interface {
 	List(ctx context.Context, tenantID uuid.UUID, filter BranchFilter) ([]Branch, int, error)
 	Update(ctx context.Context, branch *Branch) error
 	Deactivate(ctx context.Context, tenantID, branchID uuid.UUID) error
+	ListBranchEmployees(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchEmployeeSummary, error)
+	ListBranchVehicles(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchVehicleSummary, error)
 }
 
 type pgRepository struct {
@@ -367,4 +369,87 @@ func (r *pgRepository) Deactivate(ctx context.Context, tenantID, branchID uuid.U
 	}
 
 	return nil
+}
+
+func (r *pgRepository) ListBranchEmployees(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchEmployeeSummary, error) {
+	query := `
+		SELECT id, employee_code, first_name, last_name, email, phone,
+		       designation, operational_role, status, availability_status, is_active
+		FROM employees
+		WHERE tenant_id = $1 AND branch_id = $2 AND deleted_at IS NULL
+		ORDER BY first_name ASC, last_name ASC
+	`
+	rows, err := r.pool.Query(ctx, query, tenantID, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query branch employees: %w", err)
+	}
+	defer rows.Close()
+
+	list := make([]BranchEmployeeSummary, 0)
+	for rows.Next() {
+		var s BranchEmployeeSummary
+		if err := rows.Scan(
+			&s.ID,
+			&s.EmployeeCode,
+			&s.FirstName,
+			&s.LastName,
+			&s.Email,
+			&s.Phone,
+			&s.Designation,
+			&s.OperationalRole,
+			&s.Status,
+			&s.AvailabilityStatus,
+			&s.IsActive,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan branch employee: %w", err)
+		}
+		list = append(list, s)
+	}
+
+	return list, nil
+}
+
+func (r *pgRepository) ListBranchVehicles(ctx context.Context, tenantID, branchID uuid.UUID) ([]BranchVehicleSummary, error) {
+	query := `
+		SELECT v.id, v.registration_number, v.vehicle_type, v.make_model, v.year,
+		       v.max_weight_kg, v.max_volume_cbm, v.status, v.availability_status, v.is_active,
+		       CASE WHEN e.id IS NOT NULL THEN CONCAT(e.first_name, ' ', e.last_name) ELSE NULL END AS current_driver_name
+		FROM vehicles v
+		LEFT JOIN vehicle_assignments a ON v.id = a.vehicle_id AND a.status = 'ACTIVE'
+		LEFT JOIN employees e ON a.driver_id = e.id
+		WHERE v.tenant_id = $1 AND v.branch_id = $2 AND v.deleted_at IS NULL
+		ORDER BY v.registration_number ASC
+	`
+	rows, err := r.pool.Query(ctx, query, tenantID, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query branch vehicles: %w", err)
+	}
+	defer rows.Close()
+
+	list := make([]BranchVehicleSummary, 0)
+	for rows.Next() {
+		var s BranchVehicleSummary
+		var driverName *string
+		if err := rows.Scan(
+			&s.ID,
+			&s.RegistrationNumber,
+			&s.VehicleType,
+			&s.MakeModel,
+			&s.Year,
+			&s.MaxWeightKG,
+			&s.MaxVolumeCBM,
+			&s.Status,
+			&s.AvailabilityStatus,
+			&s.IsActive,
+			&driverName,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan branch vehicle: %w", err)
+		}
+		if driverName != nil && *driverName != "" {
+			s.CurrentDriverName = driverName
+		}
+		list = append(list, s)
+	}
+
+	return list, nil
 }

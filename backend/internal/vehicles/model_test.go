@@ -38,6 +38,15 @@ func TestCreateVehicleRequest_Validation(t *testing.T) {
 			},
 			wantErr: vehicles.ErrInvalidVehicleType,
 		},
+		{
+			name: "Invalid Availability Status",
+			req: vehicles.CreateVehicleRequest{
+				RegistrationNumber: "DL-01-AB-1234",
+				VehicleType:        "VAN",
+				AvailabilityStatus: "FLYING_INVALID",
+			},
+			wantErr: vehicles.ErrInvalidAvailabilityStatus,
+		},
 	}
 
 	for _, tt := range tests {
@@ -48,6 +57,63 @@ func TestCreateVehicleRequest_Validation(t *testing.T) {
 			}
 			if tt.wantErr == nil && err != nil {
 				t.Fatalf("expected nil error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestUpdateVehicleStatusRequest_Validation(t *testing.T) {
+	available := vehicles.VehicleStatusAvailable
+	invalidStatus := "NOT_A_STATUS"
+	avail := vehicles.AvailabilityStatusAvailable
+	invalidAvail := "NOT_AN_AVAIL"
+
+	tests := []struct {
+		name    string
+		req     vehicles.UpdateVehicleStatusRequest
+		wantErr bool
+	}{
+		{
+			name: "Valid Status Only",
+			req: vehicles.UpdateVehicleStatusRequest{
+				Status: &available,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid Status and Availability",
+			req: vehicles.UpdateVehicleStatusRequest{
+				Status:             &available,
+				AvailabilityStatus: &avail,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Invalid Status Value",
+			req: vehicles.UpdateVehicleStatusRequest{
+				Status: &invalidStatus,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid Availability Value",
+			req: vehicles.UpdateVehicleStatusRequest{
+				AvailabilityStatus: &invalidAvail,
+			},
+			wantErr: true,
+		},
+		{
+			name:    "Empty Payload",
+			req:     vehicles.UpdateVehicleStatusRequest{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.ValidateAndSanitize()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error? %v, got: %v", tt.wantErr, err)
 			}
 		})
 	}

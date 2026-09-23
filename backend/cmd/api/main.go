@@ -111,7 +111,7 @@ func main() {
 	branchHandler := branches.NewHandler(branchService)
 
 	employeeRepo := employees.NewRepository(db.Pool())
-	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo)
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo, userRepo, membershipRepo)
 	employeeHandler := employees.NewHandler(employeeService)
 
 	vehicleRepo := vehicles.NewRepository(db.Pool())

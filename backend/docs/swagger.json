@@ -601,6 +601,79 @@
         }
       }
     },
+    "/api/v1/tenants/{tenant_id}/branches/{branch_id}/employees": {
+      "get": {
+        "tags": ["Branches"],
+        "summary": "List Branch Employees",
+        "description": "Lists all employees assigned to a specific branch hub.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Branch personnel list retrieved", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Branch not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/branches/{branch_id}/vehicles": {
+      "get": {
+        "tags": ["Branches"],
+        "summary": "List Branch Vehicles",
+        "description": "Lists all fleet vehicles stationed at a specific branch hub.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "branch_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Branch stationed vehicles retrieved", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Branch not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/with-account": {
+      "post": {
+        "tags": ["Employees"],
+        "summary": "Create Employee With Login Account",
+        "description": "Atomically provisions user account credentials, tenant membership, and employee operational profile.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/CreateEmployeeWithAccountRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Employee and login credentials created atomically", "schema": { "$ref": "#/definitions/EmployeeResponseEnvelope" } },
+          "400": { "description": "Validation error or invalid password", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "409": { "description": "Duplicate email or employee code", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/me": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get Current Authenticated Employee Profile",
+        "description": "Returns operational profile, system role, and currently assigned vehicle for authenticated employee.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Self profile retrieved", "schema": { "$ref": "#/definitions/EmployeeMeResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Employee profile not found for user", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
     "/api/v1/tenants/{tenant_id}/employees": {
       "post": {
         "tags": ["Employees"],
@@ -683,6 +756,61 @@
         "responses": {
           "200": { "description": "Employee deactivated", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
           "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/available-drivers": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "List Available Drivers",
+        "description": "Lists verified, active drivers who are currently AVAILABLE for vehicle assignment.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Available drivers listed", "schema": { "$ref": "#/definitions/EmployeeListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/{employee_id}/status": {
+      "patch": {
+        "tags": ["Employees"],
+        "summary": "Update Employee Status and Availability",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "employee_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/UpdateEmployeeStatusRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Employee status updated", "schema": { "$ref": "#/definitions/EmployeeResponseEnvelope" } },
+          "400": { "description": "Validation error", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Employee not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/employees/{employee_id}/account-status": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get Employee Account & Login Credential Status",
+        "description": "Returns whether the employee has a linked user account, active credentials, and system role.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "employee_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Account status retrieved", "schema": { "$ref": "#/definitions/EmployeeAccountStatusResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Employee not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
         }
       }
     },
@@ -804,6 +932,64 @@
         "responses": {
           "200": { "description": "Driver unassigned, vehicle now available", "schema": { "$ref": "#/definitions/SuccessEnvelope" } },
           "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles/{vehicle_id}/status": {
+      "patch": {
+        "tags": ["Vehicles"],
+        "summary": "Update Vehicle Operating and Availability Status",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "request", "required": true, "schema": { "$ref": "#/definitions/UpdateVehicleStatusRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle status updated", "schema": { "$ref": "#/definitions/VehicleResponseEnvelope" } },
+          "400": { "description": "Validation error", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Vehicle not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/assignments": {
+      "get": {
+        "tags": ["Vehicles"],
+        "summary": "List Driver-Vehicle Assignments",
+        "description": "Lists historical and active vehicle assignments with optional filters.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "vehicle_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "employee_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "status", "type": "string", "enum": ["ACTIVE", "COMPLETED", "TERMINATED"] },
+          { "in": "query", "name": "limit", "type": "integer", "default": 20 },
+          { "in": "query", "name": "offset", "type": "integer", "default": 0 }
+        ],
+        "responses": {
+          "200": { "description": "Assignments listed", "schema": { "$ref": "#/definitions/AssignmentListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/vehicles/{vehicle_id}/assignments": {
+      "get": {
+        "tags": ["Vehicles"],
+        "summary": "Get Vehicle Assignment History",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "vehicle_id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Vehicle assignments retrieved", "schema": { "$ref": "#/definitions/AssignmentListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "404": { "description": "Vehicle not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
         }
       }
     }
@@ -958,6 +1144,50 @@
       "properties": {
         "driver_id": { "type": "string", "format": "uuid" },
         "notes": { "type": "string", "example": "Morning Route Hub 1" }
+      }
+    },
+    "UpdateEmployeeStatusRequest": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED", "TERMINATED"], "example": "ACTIVE" },
+        "availability_status": { "type": "string", "enum": ["AVAILABLE", "BUSY", "OFF_DUTY", "UNAVAILABLE"], "example": "AVAILABLE" },
+        "verification_status": { "type": "string", "enum": ["PENDING", "VERIFIED", "REJECTED"], "example": "VERIFIED" }
+      }
+    },
+    "UpdateVehicleStatusRequest": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "MAINTENANCE", "DECOMMISSIONED"], "example": "AVAILABLE" },
+        "availability_status": { "type": "string", "enum": ["AVAILABLE", "BUSY", "MAINTENANCE", "OUT_OF_SERVICE"], "example": "AVAILABLE" }
+      }
+    },
+    "DriverVehicleAssignment": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "vehicle_id": { "type": "string", "format": "uuid" },
+        "employee_id": { "type": "string", "format": "uuid" },
+        "assigned_at": { "type": "string", "format": "date-time" },
+        "unassigned_at": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["ACTIVE", "COMPLETED", "TERMINATED"] },
+        "notes": { "type": "string" },
+        "registration_number": { "type": "string" },
+        "vehicle_type": { "type": "string" },
+        "driver_name": { "type": "string" },
+        "driver_code": { "type": "string" }
+      }
+    },
+    "AssignmentListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "assignments": { "type": "array", "items": { "$ref": "#/definitions/DriverVehicleAssignment" } },
+            "total": { "type": "integer" }
+          }
+        }
       }
     },
     "AuthResponseEnvelope": {
@@ -1154,7 +1384,11 @@
         "last_name": { "type": "string" },
         "designation": { "type": "string" },
         "operational_role": { "type": "string" },
+        "employment_type": { "type": "string", "enum": ["FULL_TIME", "PART_TIME", "CONTRACT"] },
         "status": { "type": "string" },
+        "availability_status": { "type": "string", "enum": ["AVAILABLE", "BUSY", "OFF_DUTY", "UNAVAILABLE"] },
+        "verification_status": { "type": "string", "enum": ["PENDING", "VERIFIED", "REJECTED"] },
+        "joining_date": { "type": "string", "format": "date" },
         "is_active": { "type": "boolean" },
         "created_at": { "type": "string", "format": "date-time" }
       }
@@ -1173,9 +1407,76 @@
         "max_weight_kg": { "type": "number" },
         "max_volume_cbm": { "type": "number" },
         "status": { "type": "string" },
+        "availability_status": { "type": "string", "enum": ["AVAILABLE", "BUSY", "MAINTENANCE", "OUT_OF_SERVICE"] },
         "is_active": { "type": "boolean" },
         "current_driver_name": { "type": "string" },
+        "current_driver_code": { "type": "string" },
+        "current_driver_id": { "type": "string", "format": "uuid" },
         "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "CreateEmployeeWithAccountRequest": {
+      "type": "object",
+      "required": ["first_name", "last_name", "designation", "email", "system_role"],
+      "properties": {
+        "employee_code": { "type": "string" },
+        "first_name": { "type": "string" },
+        "last_name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "designation": { "type": "string" },
+        "operational_role": { "type": "string", "enum": ["DRIVER", "OPERATOR", "DISPATCHER", "SUPERVISOR", "MANAGER", "BRANCH_MANAGER", "WAREHOUSE_OPERATOR", "DELIVERY_EXECUTIVE"] },
+        "system_role": { "type": "string", "enum": ["EMPLOYEE", "TENANT_OPERATOR", "VIEWER", "TENANT_ADMIN"] },
+        "password": { "type": "string", "minLength": 8 },
+        "send_invite": { "type": "boolean" },
+        "branch_id": { "type": "string", "format": "uuid" },
+        "license_number": { "type": "string" }
+      }
+    },
+    "EmployeeAccountStatusResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "employee_id": { "type": "string", "format": "uuid" },
+            "employee_code": { "type": "string" },
+            "full_name": { "type": "string" },
+            "operational_role": { "type": "string" },
+            "status": { "type": "string" },
+            "has_account": { "type": "boolean" },
+            "user_id": { "type": "string", "format": "uuid" },
+            "user_email": { "type": "string" },
+            "user_is_active": { "type": "boolean" },
+            "system_role": { "type": "string" },
+            "branch_id": { "type": "string", "format": "uuid" },
+            "branch_name": { "type": "string" }
+          }
+        }
+      }
+    },
+    "EmployeeMeResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "employee": { "$ref": "#/definitions/Employee" },
+            "system_role": { "type": "string" },
+            "assigned_vehicle": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "format": "uuid" },
+                "registration_number": { "type": "string" },
+                "vehicle_type": { "type": "string" },
+                "make_model": { "type": "string" },
+                "status": { "type": "string" }
+              }
+            }
+          }
+        }
       }
     }
   }

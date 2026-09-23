@@ -246,3 +246,65 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, branch)
 }
+
+// GetBranchEmployees handles GET /api/v1/tenants/:tenant_id/branches/:branch_id/employees
+func (h *Handler) GetBranchEmployees(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Target tenant ID is required", nil)
+		return
+	}
+
+	branchIDStr := c.Param("branch_id")
+	branchID, err := uuid.Parse(branchIDStr)
+	if err != nil {
+		response.BadRequest(c, "Invalid branch UUID format", nil)
+		return
+	}
+
+	employees, err := h.service.GetBranchEmployees(c.Request.Context(), tenantID, branchID)
+	if err != nil {
+		if errors.Is(err, ErrBranchNotFound) {
+			response.NotFound(c, "Branch not found")
+			return
+		}
+		response.InternalServerError(c, "Failed to retrieve branch employees")
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"employees": employees,
+		"total":     len(employees),
+	})
+}
+
+// GetBranchVehicles handles GET /api/v1/tenants/:tenant_id/branches/:branch_id/vehicles
+func (h *Handler) GetBranchVehicles(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.BadRequest(c, "Target tenant ID is required", nil)
+		return
+	}
+
+	branchIDStr := c.Param("branch_id")
+	branchID, err := uuid.Parse(branchIDStr)
+	if err != nil {
+		response.BadRequest(c, "Invalid branch UUID format", nil)
+		return
+	}
+
+	vehicles, err := h.service.GetBranchVehicles(c.Request.Context(), tenantID, branchID)
+	if err != nil {
+		if errors.Is(err, ErrBranchNotFound) {
+			response.NotFound(c, "Branch not found")
+			return
+		}
+		response.InternalServerError(c, "Failed to retrieve branch vehicles")
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"vehicles": vehicles,
+		"total":    len(vehicles),
+	})
+}

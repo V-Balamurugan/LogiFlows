@@ -12,6 +12,7 @@ const (
 	RoleTenantAdmin    = "TENANT_ADMIN"
 	RoleTenantOperator = "TENANT_OPERATOR"
 	RoleViewer         = "VIEWER"
+	RoleEmployee       = "EMPLOYEE"
 )
 
 // Status constants for memberships.

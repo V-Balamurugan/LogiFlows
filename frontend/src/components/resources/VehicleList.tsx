@@ -13,7 +13,8 @@ import {
   SlidersHorizontal,
   Weight,
   Box,
-  BatteryCharging
+  BatteryCharging,
+  Wrench
 } from 'lucide-react';
 import type { Vehicle, CreateVehiclePayload, Branch, Employee } from '../../types/resources';
 import { api } from '../../services/api';
@@ -26,7 +27,6 @@ interface VehicleListProps {
 export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [drivers, setDrivers] = useState<Employee[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,24 +57,32 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [availableDrivers, setAvailableDrivers] = useState<Employee[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Status Update Modal State
+  const [statusModalVehicle, setStatusModalVehicle] = useState<Vehicle | null>(null);
+  const [statusFormData, setStatusFormData] = useState<{
+    status: Vehicle['status'];
+    availability_status: Vehicle['availability_status'];
+  }>({
+    status: 'AVAILABLE',
+    availability_status: 'AVAILABLE',
+  });
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
 
   const canManage = userRole === 'TENANT_ADMIN' || userRole === 'PLATFORM_ADMIN';
   const canAssign = canManage || userRole === 'TENANT_OPERATOR';
 
-  // Fetch Branches and Drivers
+  // Fetch Branches
   useEffect(() => {
     let isMounted = true;
     api.listBranches(tenantId, { limit: 100 })
       .then((res) => {
         if (isMounted) setBranches(res.branches || []);
-      })
-      .catch(() => {});
-
-    api.listEmployees(tenantId, { operational_role: 'DRIVER', status: 'ACTIVE', limit: 100 })
-      .then((res) => {
-        if (isMounted) setDrivers(res.employees || []);
       })
       .catch(() => {});
 
@@ -142,6 +150,22 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
     }
   };
 
+  const handleOpenAssignModal = async (v: Vehicle) => {
+    setSelectedVehicle(v);
+    setSelectedDriverId('');
+    setAssignError(null);
+    setShowAssignModal(true);
+    setLoadingDrivers(true);
+    try {
+      const res = await api.listAvailableDrivers(tenantId, v.assigned_branch_id);
+      setAvailableDrivers(res.drivers || []);
+    } catch (err: any) {
+      setAssignError(err.message || 'Failed to load eligible drivers');
+    } finally {
+      setLoadingDrivers(false);
+    }
+  };
+
   const handleAssignDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVehicle || !selectedDriverId) return;
@@ -151,24 +175,57 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
 
     try {
       await api.assignVehicle(tenantId, selectedVehicle.id, selectedDriverId);
-      const assignedDriver = drivers.find((d) => d.id === selectedDriverId);
+      const assignedDriver = availableDrivers.find((d) => d.id === selectedDriverId);
       const driverName = assignedDriver ? `${assignedDriver.first_name} ${assignedDriver.last_name}` : 'Driver';
 
       setVehicles((prev) =>
         prev.map((v) =>
           v.id === selectedVehicle.id
-            ? { ...v, status: 'ASSIGNED', current_driver_id: selectedDriverId, current_driver_name: driverName }
+            ? { ...v, status: 'ASSIGNED', availability_status: 'BUSY', current_driver_id: selectedDriverId, current_driver_name: driverName }
             : v
         )
       );
-      setSuccess(`Driver "${driverName}" assigned to vehicle "${selectedVehicle.registration_number}"`);
+      setSuccess(`Driver "${driverName}" successfully assigned to vehicle "${selectedVehicle.registration_number}"`);
       setShowAssignModal(false);
       setSelectedVehicle(null);
       setSelectedDriverId('');
     } catch (err: any) {
-      setAssignError(err.message || 'Failed to assign driver');
+      const msg = err.message || '';
+      if (msg.includes('409') || msg.includes('conflict') || msg.includes('already')) {
+        setAssignError('Assignment Conflict: This driver or vehicle already has an active assignment.');
+      } else {
+        setAssignError(msg || 'Failed to assign driver');
+      }
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handleOpenStatusModal = (v: Vehicle) => {
+    setStatusModalVehicle(v);
+    setStatusFormData({
+      status: v.status || 'AVAILABLE',
+      availability_status: v.availability_status || 'AVAILABLE',
+    });
+    setStatusUpdateError(null);
+  };
+
+  const handleSaveVehicleStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModalVehicle) return;
+    setUpdatingStatus(true);
+    setStatusUpdateError(null);
+    try {
+      const updated = await api.updateVehicleStatus(tenantId, statusModalVehicle.id, statusFormData);
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === statusModalVehicle.id ? { ...v, ...updated } : v))
+      );
+      setSuccess(`Vehicle ${statusModalVehicle.registration_number} status updated to ${statusFormData.status}`);
+      setStatusModalVehicle(null);
+    } catch (err: any) {
+      setStatusUpdateError(err.message || 'Failed to update vehicle status');
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -225,6 +282,20 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
       case 'DECOMMISSIONED':
       default:
         return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
+    }
+  };
+
+  const getAvailabilityBadgeStyle = (avail?: string) => {
+    switch (avail) {
+      case 'AVAILABLE':
+        return { bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)', dot: '#10b981', label: 'Available' };
+      case 'BUSY':
+        return { bg: 'rgba(59, 130, 246, 0.15)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)', dot: '#3b82f6', label: 'Busy' };
+      case 'MAINTENANCE':
+        return { bg: 'rgba(244, 63, 94, 0.15)', text: '#fda4af', border: 'rgba(244, 63, 94, 0.3)', dot: '#f43f5e', label: 'Maintenance' };
+      case 'OUT_OF_SERVICE':
+      default:
+        return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)', dot: '#94a3b8', label: 'Out of Service' };
     }
   };
 
@@ -503,17 +574,40 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                     )}
                   </div>
 
-                  <span style={{
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    padding: '0.25rem 0.6rem',
-                    borderRadius: '12px',
-                    background: statusStyle.bg,
-                    color: statusStyle.text,
-                    border: `1px solid ${statusStyle.border}`,
-                  }}>
-                    {v.status}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '12px',
+                      background: statusStyle.bg,
+                      color: statusStyle.text,
+                      border: `1px solid ${statusStyle.border}`,
+                    }}>
+                      {v.status}
+                    </span>
+
+                    {(() => {
+                      const availStyle = getAvailabilityBadgeStyle(v.availability_status);
+                      return (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '12px',
+                          background: availStyle.bg,
+                          color: availStyle.text,
+                          border: `1px solid ${availStyle.border}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: availStyle.dot }} />
+                          {availStyle.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -583,10 +677,7 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                         </button>
                       ) : (
                         <button
-                          onClick={() => {
-                            setSelectedVehicle(v);
-                            setShowAssignModal(true);
-                          }}
+                          onClick={() => handleOpenAssignModal(v)}
                           style={{
                             background: 'rgba(59, 130, 246, 0.15)',
                             border: '1px solid rgba(59, 130, 246, 0.3)',
@@ -606,7 +697,30 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                 </div>
 
                 {canManage && v.is_active && (
-                  <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button
+                      onClick={() => handleOpenStatusModal(v)}
+                      style={{
+                        background: 'rgba(6, 182, 212, 0.1)',
+                        border: '1px solid rgba(6, 182, 212, 0.25)',
+                        color: 'var(--accent-cyan)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '0.35rem 0.65rem',
+                        borderRadius: '6px',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(6, 182, 212, 0.2)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(6, 182, 212, 0.1)')}
+                    >
+                      <Wrench size={13} />
+                      Update Status
+                    </button>
+
                     <button
                       onClick={() => handleDecommission(v.id, v.registration_number)}
                       style={{
@@ -968,27 +1082,48 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                   Select Qualified Driver *
                 </label>
-                <select
-                  required
-                  value={selectedDriverId}
-                  onChange={(e) => setSelectedDriverId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.65rem 0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-subtle)',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    color: 'var(--text-primary)',
+                {loadingDrivers ? (
+                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <Loader2 size={18} className="animate-spin" style={{ margin: '0 auto 0.5rem', display: 'block' }} />
+                    Verifying available driver eligibility...
+                  </div>
+                ) : availableDrivers.length === 0 ? (
+                  <div style={{
+                    padding: '0.85rem',
+                    borderRadius: '8px',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    color: '#fbbf24',
                     fontSize: '0.85rem',
-                  }}
-                >
-                  <option value="">Choose an active driver...</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.first_name} {d.last_name} ({d.employee_code}){d.license_number ? ` • Lic: ${d.license_number}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>No Eligible Drivers Available</p>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', opacity: 0.85 }}>
+                      Under Phase 3 rules, only employees with operational role <strong>DRIVER</strong>, status <strong>ACTIVE</strong>, and availability <strong>AVAILABLE</strong> at this hub can be assigned.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={selectedDriverId}
+                    onChange={(e) => setSelectedDriverId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="">Choose an eligible driver...</option>
+                    {availableDrivers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.first_name} {d.last_name} ({d.employee_code}){d.license_number ? ` • Lic: ${d.license_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
@@ -1012,7 +1147,7 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                 </button>
                 <button
                   type="submit"
-                  disabled={assigning || !selectedDriverId}
+                  disabled={assigning || !selectedDriverId || availableDrivers.length === 0}
                   style={{
                     padding: '0.65rem 1.5rem',
                     borderRadius: '8px',
@@ -1020,7 +1155,7 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                     background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                     color: '#ffffff',
                     fontWeight: 600,
-                    cursor: (assigning || !selectedDriverId) ? 'not-allowed' : 'pointer',
+                    cursor: (assigning || !selectedDriverId || availableDrivers.length === 0) ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.5rem',
@@ -1028,6 +1163,160 @@ export const VehicleList: React.FC<VehicleListProps> = ({ tenantId, userRole }) 
                 >
                   {assigning ? <Loader2 size={16} className="animate-spin" /> : null}
                   {assigning ? 'Assigning...' : 'Confirm Assignment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Vehicle Status Modal */}
+      {statusModalVehicle && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem',
+        }}>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '14px',
+            width: '100%',
+            maxWidth: '460px',
+            padding: '1.75rem',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <Wrench size={20} style={{ color: 'var(--accent-cyan)' }} />
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                    Update Fleet Vehicle Status
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    {statusModalVehicle.registration_number} ({statusModalVehicle.vehicle_type})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setStatusModalVehicle(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {statusUpdateError && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                background: 'rgba(244, 63, 94, 0.1)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                color: '#fda4af',
+                marginBottom: '1rem',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}>
+                <AlertCircle size={16} />
+                <span>{statusUpdateError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveVehicleStatus} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Operational Vehicle Status
+                </label>
+                <select
+                  value={statusFormData.status}
+                  onChange={(e) => setStatusFormData({ ...statusFormData, status: e.target.value as any })}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="AVAILABLE">AVAILABLE (Ready for assignment)</option>
+                  <option value="ASSIGNED">ASSIGNED (Allocated to driver)</option>
+                  <option value="IN_TRANSIT">IN_TRANSIT (On route)</option>
+                  <option value="MAINTENANCE">MAINTENANCE (Workshop inspection)</option>
+                  <option value="DECOMMISSIONED">DECOMMISSIONED (Retired from fleet)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Availability Status
+                </label>
+                <select
+                  value={statusFormData.availability_status}
+                  onChange={(e) => setStatusFormData({ ...statusFormData, availability_status: e.target.value as any })}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="AVAILABLE">AVAILABLE</option>
+                  <option value="BUSY">BUSY</option>
+                  <option value="MAINTENANCE">MAINTENANCE</option>
+                  <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setStatusModalVehicle(null)}
+                  style={{
+                    padding: '0.65rem 1.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'transparent',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingStatus}
+                  style={{
+                    padding: '0.65rem 1.5rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: updatingStatus ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  {updatingStatus ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {updatingStatus ? 'Updating...' : 'Save Status'}
                 </button>
               </div>
             </form>

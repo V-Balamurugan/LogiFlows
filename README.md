@@ -6,9 +6,9 @@ LogiFlows is an enterprise-grade logistics platform designed to coordinate multi
 
 ---
 
-## Current Status: Phase 2 — Complete (Organization, Branch, Employee, and Fleet Management)
+### Current Status: Phase 3 — Complete (Employees, Roles, Vehicles & Fleet Assignment)
 
-LogiFlows has successfully completed and verified **Phase 0 (Foundation)**, **Phase 1 (Identity & Multi-Tenancy)**, and **Phase 2 (Organization & Resource Management)**:
+LogiFlows has successfully completed and verified **Phase 0 (Foundation)**, **Phase 1 (Identity & Multi-Tenancy)**, **Phase 2 (Organization & Branch Management)**, and **Phase 3 (Operational Resource Management)**:
 - **Phase 0: Foundation**:
   - Modular Go backend architecture with graceful shutdown lifecycle
   - PostgreSQL 16 with PostGIS geospatial extensions & Goose transactional migrations
@@ -25,11 +25,14 @@ LogiFlows has successfully completed and verified **Phase 0 (Foundation)**, **Ph
 - **Phase 2: Multi-Tenant Companies and Distribution Branches**:
   - **Company & Tenant Management**: Dedicated endpoints (`/api/v1/companies/current`, `/api/v1/companies/:id`), organization metadata editing, compliance status, and member roster management
   - **Branch & Hub Management**: PostGIS spatial point geometry (`GEOMETRY(Point, 4326)`), coverage radius, geographic distance search (`ST_Distance`), operating status transitions (`ACTIVE`, `INACTIVE`, `SUSPENDED`), tenant-scoped uniqueness, and soft deletion
-  - **Foundation Resource Management**: Minimal compatible foundation for workforce and fleet assets with partial unique index conflict prevention
-  - **Web Console**: Modern React 19 + TypeScript + Vite dark-mode dashboard with `CompanyProfile`, `BranchList`, `EmployeeList`, and `VehicleList` components
-  - **Flutter Mobile Application**: Material 3 mobile application in `/mobile` featuring `CompanyScreen`, `BranchScreen`, typed Dart models, and bottom tab navigation
-  - **Testing & Verification**: 100% automated test pass rate across backend Go tests (42 unit, 41 integration, 17 regression), frontend Vitest tests (9/9), and mobile models
-  - **API Contracts & Swagger**: Complete OpenAPI 3.0 / Swagger 1.0 specification with interactive UI at `/swagger/index.html`
+- **Phase 3: Operational Resources — Employees, Roles, and Vehicles**:
+  - **Employee Management**: Atomic auto-generation of unique codes (`EMP-XXXX`) using tenant-partitioned sequence counters (`tenant_employee_sequences`), operational roles (`DRIVER`, `OPERATOR`, `DISPATCHER`, `SUPERVISOR`, `MANAGER`), KYC verification states, operational availability tracking (`AVAILABLE`, `BUSY`, `OFF_DUTY`, `UNAVAILABLE`), and soft-deactivation.
+  - **Fleet Vehicle Management**: Capacity constraints (strictly positive `max_weight_kg` and `max_volume_cbm`), branch association, zero-emission electric vehicles, operating statuses (`AVAILABLE`, `ASSIGNED`, `IN_TRANSIT`, `MAINTENANCE`, `DECOMMISSIONED`), and availability tracking.
+  - **Driver-Vehicle Assignment Foundation**: Verified driver eligibility validation, mutual availability enforcement, atomic transitions, concurrency race-condition prevention (database-level partial unique indexes returning HTTP 409 Conflict), unassignment restoration, and assignment history logging.
+  - **React Web Dashboard**: Dark cyber-logistics dashboard with `EmployeeList` (role/availability/KYC badges, available drivers filter, status modal) and `VehicleList` (fleet overview, real-time driver assignment modal, status controls). 14/14 automated tests passed, production build verified.
+  - **Flutter Mobile Application**: Material 3 mobile application with updated `EmployeeModel`, `VehicleModel`, and `AssignmentModel`, `EmployeeScreen` with interactive availability dialog, and `VehicleScreen` with dynamic driver assignment.
+  - **Testing & Verification**: 100% automated test pass rate across backend Go tests (19 packages, 5 concurrency integration suites, 7 regression suites), frontend tests (14/14), and full security scenario matrix.
+  - **API Contracts & Swagger**: Complete OpenAPI 2.0 / Swagger specification with interactive UI at `/swagger/index.html`.
 
 ---
 

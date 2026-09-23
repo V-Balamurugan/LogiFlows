@@ -12,6 +12,7 @@ const (
 	RoleTenantAdmin    = memberships.RoleTenantAdmin
 	RoleTenantOperator = memberships.RoleTenantOperator
 	RoleViewer         = memberships.RoleViewer
+	RoleEmployee       = memberships.RoleEmployee
 )
 
 // ValidRoles returns all authorized roles in LogiFlows.
@@ -20,6 +21,7 @@ var ValidRoles = []string{
 	RoleTenantAdmin,
 	RoleTenantOperator,
 	RoleViewer,
+	RoleEmployee,
 }
 
 // IsValidRole checks if a given role string is a recognized system role.
@@ -47,5 +49,10 @@ func CanOperateTenant(role string, isPlatformAdmin bool) bool {
 
 // CanViewTenant returns true if the user has at least read-only viewing permissions.
 func CanViewTenant(role string, isPlatformAdmin bool) bool {
-	return HasRole(role, isPlatformAdmin, RoleTenantAdmin, RoleTenantOperator, RoleViewer)
+	return HasRole(role, isPlatformAdmin, RoleTenantAdmin, RoleTenantOperator, RoleViewer, RoleEmployee)
+}
+
+// CanAccessEmployeeSelf returns true if the user can access their own employee profile.
+func CanAccessEmployeeSelf(role string, isPlatformAdmin bool) bool {
+	return HasRole(role, isPlatformAdmin, RoleTenantAdmin, RoleTenantOperator, RoleViewer, RoleEmployee)
 }

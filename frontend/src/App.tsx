@@ -12,7 +12,8 @@ import {
   Building2,
   Users,
   Truck,
-  Activity
+  Activity,
+  UserCheck
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/auth/AuthScreen';
@@ -21,6 +22,7 @@ import { CompanyProfile } from './components/tenants/CompanyProfile';
 import { BranchList } from './components/resources/BranchList';
 import { EmployeeList } from './components/resources/EmployeeList';
 import { VehicleList } from './components/resources/VehicleList';
+import { EmployeeSelfProfile } from './components/resources/EmployeeSelfProfile';
 
 interface BackendReadiness {
   status: string;
@@ -766,7 +768,13 @@ export default function App() {
 
 function MainLayout() {
   const { user, isLoading, activeTenant } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'branches' | 'employees' | 'fleet'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'branches' | 'employees' | 'fleet' | 'profile'>('overview');
+
+  useEffect(() => {
+    if (activeTenant?.role === 'EMPLOYEE') {
+      setActiveTab('profile');
+    }
+  }, [activeTenant?.role]);
 
   if (isLoading) {
     return (
@@ -904,6 +912,27 @@ function MainLayout() {
           <Truck size={17} />
           Fleet Vehicles
         </button>
+
+        <button
+          onClick={() => setActiveTab('profile')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'profile' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'profile' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'profile' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <UserCheck size={17} />
+          My Staff Profile
+        </button>
       </nav>
 
       {/* View Content */}
@@ -949,6 +978,16 @@ function MainLayout() {
           ) : (
             <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
               <p>Please select an active tenant organization from the header to manage fleet vehicles.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'profile' && (
+          activeTenant ? (
+            <EmployeeSelfProfile tenantId={activeTenant.id} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to view your employee profile.</p>
             </div>
           )
         )}

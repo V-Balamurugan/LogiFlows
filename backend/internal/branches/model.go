@@ -122,3 +122,31 @@ type BranchListResponse struct {
 	Page     int      `json:"page"`
 	Limit    int      `json:"limit"`
 }
+
+type BranchEmployeeSummary struct {
+	ID                 uuid.UUID `json:"id"`
+	EmployeeCode       string    `json:"employee_code"`
+	FirstName          string    `json:"first_name"`
+	LastName           string    `json:"last_name"`
+	Email              *string   `json:"email,omitempty"`
+	Phone              *string   `json:"phone,omitempty"`
+	Designation        string    `json:"designation"`
+	OperationalRole    string    `json:"operational_role"`
+	Status             string    `json:"status"`
+	AvailabilityStatus string    `json:"availability_status"`
+	IsActive           bool      `json:"is_active"`
+}
+
+type BranchVehicleSummary struct {
+	ID                 uuid.UUID `json:"id"`
+	RegistrationNumber string    `json:"registration_number"`
+	VehicleType        string    `json:"vehicle_type"`
+	MakeModel          *string   `json:"make_model,omitempty"`
+	Year               *int      `json:"year,omitempty"`
+	MaxWeightKG        float64   `json:"max_weight_kg"`
+	MaxVolumeCBM       float64   `json:"max_volume_cbm"`
+	Status             string    `json:"status"`
+	AvailabilityStatus string    `json:"availability_status"`
+	IsActive           bool      `json:"is_active"`
+	CurrentDriverName  *string   `json:"current_driver_name,omitempty"`
+}

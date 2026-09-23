@@ -140,5 +140,112 @@ void main() {
       expect(vehicle.isElectric, isFalse);
       expect(vehicle.maxWeightKg, 2500.0);
     });
+
+    test('EmployeeModel deserializes Phase 3 availability and verification statuses', () {
+      final json = {
+        'id': 'emp-301',
+        'tenant_id': 't-001',
+        'employee_code': 'EMP-0042',
+        'first_name': 'Kavitha',
+        'last_name': 'Raman',
+        'operational_role': 'DRIVER',
+        'availability_status': 'AVAILABLE',
+        'verification_status': 'VERIFIED',
+        'status': 'ACTIVE',
+        'is_active': true,
+      };
+
+      final emp = EmployeeModel.fromJson(json);
+
+      expect(emp.employeeCode, 'EMP-0042');
+      expect(emp.fullName, 'Kavitha Raman');
+      expect(emp.isDriver, isTrue);
+      expect(emp.isAvailable, isTrue);
+      expect(emp.availabilityStatus, 'AVAILABLE');
+      expect(emp.verificationStatus, 'VERIFIED');
+    });
+
+    test('AssignmentModel deserializes active vehicle-driver link', () {
+      final json = {
+        'id': 'asgn-101',
+        'tenant_id': 't-001',
+        'vehicle_id': 'veh-501',
+        'employee_id': 'emp-301',
+        'registration_number': 'TN-05-EV-1234',
+        'vehicle_type': 'ELECTRIC_VAN',
+        'driver_name': 'Kavitha Raman',
+        'driver_code': 'EMP-0042',
+        'assigned_at': '2026-09-23T10:00:00Z',
+        'status': 'ACTIVE',
+        'notes': 'Morning dispatch run',
+      };
+
+      final asgn = AssignmentModel.fromJson(json);
+
+      expect(asgn.id, 'asgn-101');
+      expect(asgn.vehicleId, 'veh-501');
+      expect(asgn.employeeId, 'emp-301');
+      expect(asgn.registrationNumber, 'TN-05-EV-1234');
+      expect(asgn.driverName, 'Kavitha Raman');
+      expect(asgn.driverCode, 'EMP-0042');
+      expect(asgn.isActive, isTrue);
+    });
+
+    test('EmployeeMeModel deserializes current user profile with assigned vehicle', () {
+      final json = {
+        'employee': {
+          'id': 'emp-801',
+          'tenant_id': 't-001',
+          'employee_code': 'EMP-0088',
+          'first_name': 'Deepak',
+          'last_name': 'Sharma',
+          'designation': 'Senior Fleet Driver',
+          'operational_role': 'DRIVER',
+          'status': 'ACTIVE',
+          'availability_status': 'BUSY',
+          'verification_status': 'VERIFIED',
+          'is_active': true,
+        },
+        'system_role': 'EMPLOYEE',
+        'assigned_vehicle': {
+          'id': 'veh-901',
+          'registration_number': 'MH-02-CB-4567',
+          'vehicle_type': 'TRUCK',
+          'make_model': 'Eicher Pro 2049',
+          'status': 'ACTIVE',
+        },
+      };
+
+      final me = EmployeeMeModel.fromJson(json);
+
+      expect(me.employee.employeeCode, 'EMP-0088');
+      expect(me.employee.fullName, 'Deepak Sharma');
+      expect(me.systemRole, 'EMPLOYEE');
+      expect(me.assignedVehicle, isNotNull);
+      expect(me.assignedVehicle!.registrationNumber, 'MH-02-CB-4567');
+      expect(me.assignedVehicle!.vehicleType, 'TRUCK');
+    });
+
+    test('EmployeeAccountStatusModel deserializes account status verification', () {
+      final json = {
+        'employee_id': 'emp-801',
+        'employee_code': 'EMP-0088',
+        'full_name': 'Deepak Sharma',
+        'operational_role': 'DRIVER',
+        'status': 'ACTIVE',
+        'has_account': true,
+        'user_id': 'usr-999',
+        'user_email': 'deepak@logiflows.test',
+        'user_is_active': true,
+        'system_role': 'EMPLOYEE',
+      };
+
+      final status = EmployeeAccountStatusModel.fromJson(json);
+
+      expect(status.employeeId, 'emp-801');
+      expect(status.hasAccount, isTrue);
+      expect(status.userEmail, 'deepak@logiflows.test');
+      expect(status.systemRole, 'EMPLOYEE');
+    });
   });
 }

@@ -18,6 +18,7 @@ type Repository interface {
 	GetVehicleByRegNum(ctx context.Context, tenantID uuid.UUID, regNum string) (*Vehicle, error)
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, filter VehicleFilter) ([]Vehicle, int, error)
 	UpdateVehicle(ctx context.Context, v *Vehicle) error
+	UpdateVehicleStatus(ctx context.Context, tenantID, vehicleID uuid.UUID, req UpdateVehicleStatusRequest) error
 	DeactivateVehicle(ctx context.Context, tenantID, vehicleID uuid.UUID) error
 
 	CreateAssignment(ctx context.Context, a *VehicleAssignment) error
@@ -39,13 +40,19 @@ func (r *pgRepository) CreateVehicle(ctx context.Context, v *Vehicle) error {
 	query := `
 		INSERT INTO vehicles (
 			tenant_id, branch_id, registration_number, vehicle_type,
-			make_model, year, max_weight_kg, max_volume_cbm, status, is_active
+			make_model, year, max_weight_kg, max_volume_cbm, status,
+			availability_status, is_active
 		) VALUES (
 			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9, $10
+			$5, $6, $7, $8, $9,
+			$10, $11
 		)
 		RETURNING id, created_at, updated_at
 	`
+
+	if v.AvailabilityStatus == "" {
+		v.AvailabilityStatus = AvailabilityStatusAvailable
+	}
 
 	err := r.pool.QueryRow(
 		ctx,
@@ -59,6 +66,7 @@ func (r *pgRepository) CreateVehicle(ctx context.Context, v *Vehicle) error {
 		v.MaxWeightKG,
 		v.MaxVolumeCBM,
 		v.Status,
+		v.AvailabilityStatus,
 		v.IsActive,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 
@@ -79,8 +87,8 @@ func (r *pgRepository) GetVehicleByID(ctx context.Context, tenantID, vehicleID u
 	query := `
 		SELECT 
 			v.id, v.tenant_id, v.branch_id, v.registration_number, v.vehicle_type,
-			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status, v.is_active,
-			v.created_at, v.updated_at,
+			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status,
+			v.availability_status, v.is_active, v.created_at, v.updated_at, v.deleted_at,
 			b.name AS branch_name, b.branch_code AS branch_code,
 			e.id AS current_driver_id,
 			CASE WHEN e.id IS NOT NULL THEN CONCAT(e.first_name, ' ', e.last_name) ELSE NULL END AS current_driver_name
@@ -88,7 +96,7 @@ func (r *pgRepository) GetVehicleByID(ctx context.Context, tenantID, vehicleID u
 		LEFT JOIN branches b ON v.branch_id = b.id
 		LEFT JOIN vehicle_assignments va ON v.id = va.vehicle_id AND va.status = 'ACTIVE'
 		LEFT JOIN employees e ON va.driver_id = e.id
-		WHERE v.id = $1 AND v.tenant_id = $2
+		WHERE v.id = $1 AND v.tenant_id = $2 AND v.deleted_at IS NULL
 	`
 
 	v := &Vehicle{}
@@ -103,9 +111,11 @@ func (r *pgRepository) GetVehicleByID(ctx context.Context, tenantID, vehicleID u
 		&v.MaxWeightKG,
 		&v.MaxVolumeCBM,
 		&v.Status,
+		&v.AvailabilityStatus,
 		&v.IsActive,
 		&v.CreatedAt,
 		&v.UpdatedAt,
+		&v.DeletedAt,
 		&v.BranchName,
 		&v.BranchCode,
 		&v.CurrentDriverID,
@@ -126,8 +136,8 @@ func (r *pgRepository) GetVehicleByRegNum(ctx context.Context, tenantID uuid.UUI
 	query := `
 		SELECT 
 			v.id, v.tenant_id, v.branch_id, v.registration_number, v.vehicle_type,
-			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status, v.is_active,
-			v.created_at, v.updated_at,
+			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status,
+			v.availability_status, v.is_active, v.created_at, v.updated_at, v.deleted_at,
 			b.name AS branch_name, b.branch_code AS branch_code,
 			e.id AS current_driver_id,
 			CASE WHEN e.id IS NOT NULL THEN CONCAT(e.first_name, ' ', e.last_name) ELSE NULL END AS current_driver_name
@@ -135,7 +145,7 @@ func (r *pgRepository) GetVehicleByRegNum(ctx context.Context, tenantID uuid.UUI
 		LEFT JOIN branches b ON v.branch_id = b.id
 		LEFT JOIN vehicle_assignments va ON v.id = va.vehicle_id AND va.status = 'ACTIVE'
 		LEFT JOIN employees e ON va.driver_id = e.id
-		WHERE v.registration_number = $1 AND v.tenant_id = $2
+		WHERE v.registration_number = $1 AND v.tenant_id = $2 AND v.deleted_at IS NULL
 	`
 
 	v := &Vehicle{}
@@ -150,9 +160,11 @@ func (r *pgRepository) GetVehicleByRegNum(ctx context.Context, tenantID uuid.UUI
 		&v.MaxWeightKG,
 		&v.MaxVolumeCBM,
 		&v.Status,
+		&v.AvailabilityStatus,
 		&v.IsActive,
 		&v.CreatedAt,
 		&v.UpdatedAt,
+		&v.DeletedAt,
 		&v.BranchName,
 		&v.BranchCode,
 		&v.CurrentDriverID,
@@ -170,7 +182,7 @@ func (r *pgRepository) GetVehicleByRegNum(ctx context.Context, tenantID uuid.UUI
 }
 
 func (r *pgRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, filter VehicleFilter) ([]Vehicle, int, error) {
-	whereClauses := []string{"v.tenant_id = $1"}
+	whereClauses := []string{"v.tenant_id = $1", "v.deleted_at IS NULL"}
 	args := []interface{}{tenantID}
 	argIdx := 2
 
@@ -199,6 +211,12 @@ func (r *pgRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, fil
 		argIdx++
 	}
 
+	if filter.AvailabilityStatus != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("v.availability_status = $%d", argIdx))
+		args = append(args, filter.AvailabilityStatus)
+		argIdx++
+	}
+
 	whereSQL := strings.Join(whereClauses, " AND ")
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM vehicles v WHERE %s", whereSQL)
@@ -219,8 +237,8 @@ func (r *pgRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, fil
 	query := fmt.Sprintf(`
 		SELECT 
 			v.id, v.tenant_id, v.branch_id, v.registration_number, v.vehicle_type,
-			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status, v.is_active,
-			v.created_at, v.updated_at,
+			v.make_model, v.year, v.max_weight_kg, v.max_volume_cbm, v.status,
+			v.availability_status, v.is_active, v.created_at, v.updated_at, v.deleted_at,
 			b.name AS branch_name, b.branch_code AS branch_code,
 			e.id AS current_driver_id,
 			CASE WHEN e.id IS NOT NULL THEN CONCAT(e.first_name, ' ', e.last_name) ELSE NULL END AS current_driver_name
@@ -255,9 +273,11 @@ func (r *pgRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, fil
 			&v.MaxWeightKG,
 			&v.MaxVolumeCBM,
 			&v.Status,
+			&v.AvailabilityStatus,
 			&v.IsActive,
 			&v.CreatedAt,
 			&v.UpdatedAt,
+			&v.DeletedAt,
 			&v.BranchName,
 			&v.BranchCode,
 			&v.CurrentDriverID,
@@ -281,9 +301,10 @@ func (r *pgRepository) UpdateVehicle(ctx context.Context, v *Vehicle) error {
 			max_volume_cbm = $5,
 			branch_id = $6,
 			status = $7,
-			is_active = $8,
+			availability_status = $8,
+			is_active = $9,
 			updated_at = NOW()
-		WHERE id = $9 AND tenant_id = $10
+		WHERE id = $10 AND tenant_id = $11 AND deleted_at IS NULL
 		RETURNING updated_at
 	`
 
@@ -297,6 +318,7 @@ func (r *pgRepository) UpdateVehicle(ctx context.Context, v *Vehicle) error {
 		v.MaxVolumeCBM,
 		v.BranchID,
 		v.Status,
+		v.AvailabilityStatus,
 		v.IsActive,
 		v.ID,
 		v.TenantID,
@@ -312,11 +334,50 @@ func (r *pgRepository) UpdateVehicle(ctx context.Context, v *Vehicle) error {
 	return nil
 }
 
+func (r *pgRepository) UpdateVehicleStatus(ctx context.Context, tenantID, vehicleID uuid.UUID, req UpdateVehicleStatusRequest) error {
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{vehicleID, tenantID}
+	argIdx := 3
+
+	if req.Status != nil {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, *req.Status)
+		argIdx++
+		if *req.Status == VehicleStatusDecommissioned {
+			setClauses = append(setClauses, "is_active = FALSE")
+		} else {
+			setClauses = append(setClauses, "is_active = TRUE")
+		}
+	}
+
+	if req.AvailabilityStatus != nil {
+		setClauses = append(setClauses, fmt.Sprintf("availability_status = $%d", argIdx))
+		args = append(args, *req.AvailabilityStatus)
+		argIdx++
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE vehicles SET %s
+		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+	`, strings.Join(setClauses, ", "))
+
+	cmdTag, err := r.pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update vehicle status: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrVehicleNotFound
+	}
+
+	return nil
+}
+
 func (r *pgRepository) DeactivateVehicle(ctx context.Context, tenantID, vehicleID uuid.UUID) error {
 	query := `
 		UPDATE vehicles
-		SET is_active = FALSE, status = 'DECOMMISSIONED', updated_at = NOW()
-		WHERE id = $1 AND tenant_id = $2
+		SET is_active = FALSE, status = 'DECOMMISSIONED', availability_status = 'UNAVAILABLE',
+		    deleted_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
 	`
 	cmdTag, err := r.pool.Exec(ctx, query, vehicleID, tenantID)
 	if err != nil {
@@ -370,7 +431,8 @@ func (r *pgRepository) GetActiveAssignmentByVehicle(ctx context.Context, tenantI
 			va.id, va.tenant_id, va.vehicle_id, va.driver_id, va.assigned_by,
 			va.assigned_at, va.unassigned_at, va.status, va.notes, va.created_at, va.updated_at,
 			v.registration_number,
-			CONCAT(e.first_name, ' ', e.last_name) AS driver_name
+			CONCAT(e.first_name, ' ', e.last_name) AS driver_name,
+			e.employee_code AS driver_code
 		FROM vehicle_assignments va
 		JOIN vehicles v ON va.vehicle_id = v.id
 		JOIN employees e ON va.driver_id = e.id
@@ -392,6 +454,7 @@ func (r *pgRepository) GetActiveAssignmentByVehicle(ctx context.Context, tenantI
 		&a.UpdatedAt,
 		&a.RegistrationNumber,
 		&a.DriverName,
+		&a.DriverCode,
 	)
 
 	if err != nil {
@@ -410,7 +473,8 @@ func (r *pgRepository) GetActiveAssignmentByDriver(ctx context.Context, tenantID
 			va.id, va.tenant_id, va.vehicle_id, va.driver_id, va.assigned_by,
 			va.assigned_at, va.unassigned_at, va.status, va.notes, va.created_at, va.updated_at,
 			v.registration_number,
-			CONCAT(e.first_name, ' ', e.last_name) AS driver_name
+			CONCAT(e.first_name, ' ', e.last_name) AS driver_name,
+			e.employee_code AS driver_code
 		FROM vehicle_assignments va
 		JOIN vehicles v ON va.vehicle_id = v.id
 		JOIN employees e ON va.driver_id = e.id
@@ -432,6 +496,7 @@ func (r *pgRepository) GetActiveAssignmentByDriver(ctx context.Context, tenantID
 		&a.UpdatedAt,
 		&a.RegistrationNumber,
 		&a.DriverName,
+		&a.DriverCode,
 	)
 
 	if err != nil {
@@ -497,7 +562,8 @@ func (r *pgRepository) ListAssignments(ctx context.Context, tenantID uuid.UUID, 
 			va.id, va.tenant_id, va.vehicle_id, va.driver_id, va.assigned_by,
 			va.assigned_at, va.unassigned_at, va.status, va.notes, va.created_at, va.updated_at,
 			v.registration_number,
-			CONCAT(e.first_name, ' ', e.last_name) AS driver_name
+			CONCAT(e.first_name, ' ', e.last_name) AS driver_name,
+			e.employee_code AS driver_code
 		FROM vehicle_assignments va
 		JOIN vehicles v ON va.vehicle_id = v.id
 		JOIN employees e ON va.driver_id = e.id
@@ -531,6 +597,7 @@ func (r *pgRepository) ListAssignments(ctx context.Context, tenantID uuid.UUID, 
 			&a.UpdatedAt,
 			&a.RegistrationNumber,
 			&a.DriverName,
+			&a.DriverCode,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan vehicle assignment row: %w", err)
 		}

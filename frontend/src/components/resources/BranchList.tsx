@@ -10,9 +10,12 @@ import {
   Loader2, 
   Trash2, 
   Globe2,
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Users,
+  Truck,
+  Eye
 } from 'lucide-react';
-import type { Branch, CreateBranchPayload } from '../../types/resources';
+import type { Branch, CreateBranchPayload, BranchEmployeeSummary, BranchVehicleSummary } from '../../types/resources';
 import { api } from '../../services/api';
 
 interface BranchListProps {
@@ -49,7 +52,34 @@ export const BranchList: React.FC<BranchListProps> = ({ tenantId, userRole }) =>
     coverage_radius_km: 15,
   });
 
+  // Branch Assets Inspection State
+  const [selectedBranchAssets, setSelectedBranchAssets] = useState<Branch | null>(null);
+  const [branchAssetsLoading, setBranchAssetsLoading] = useState(false);
+  const [branchAssetsError, setBranchAssetsError] = useState<string | null>(null);
+  const [branchEmployees, setBranchEmployees] = useState<BranchEmployeeSummary[]>([]);
+  const [branchVehicles, setBranchVehicles] = useState<BranchVehicleSummary[]>([]);
+  const [assetTab, setAssetTab] = useState<'employees' | 'vehicles'>('employees');
+
   const canManage = userRole === 'TENANT_ADMIN' || userRole === 'PLATFORM_ADMIN';
+
+  const handleOpenBranchAssets = async (branch: Branch) => {
+    setSelectedBranchAssets(branch);
+    setBranchAssetsLoading(true);
+    setBranchAssetsError(null);
+    setAssetTab('employees');
+    try {
+      const [empRes, vehRes] = await Promise.all([
+        api.getBranchEmployees(tenantId, branch.id),
+        api.getBranchVehicles(tenantId, branch.id),
+      ]);
+      setBranchEmployees(empRes.employees || []);
+      setBranchVehicles(vehRes.vehicles || []);
+    } catch (err: any) {
+      setBranchAssetsError(err.message || 'Failed to load branch assets');
+    } finally {
+      setBranchAssetsLoading(false);
+    }
+  };
 
   const fetchBranches = useCallback(async () => {
     setLoading(true);
@@ -390,8 +420,31 @@ export const BranchList: React.FC<BranchListProps> = ({ tenantId, userRole }) =>
                 </div>
               </div>
 
-              {canManage && b.is_active && (
-                <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  onClick={() => handleOpenBranchAssets(b)}
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    color: 'var(--accent-cyan)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)')}
+                >
+                  <Eye size={13} />
+                  <span>View Staff & Fleet</span>
+                </button>
+
+                {canManage && b.is_active && (
                   <button
                     onClick={() => handleDeactivate(b.id, b.name)}
                     style={{
@@ -410,10 +463,10 @@ export const BranchList: React.FC<BranchListProps> = ({ tenantId, userRole }) =>
                     onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                   >
                     <Trash2 size={14} />
-                    Deactivate Hub
+                    Deactivate
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -717,6 +770,279 @@ export const BranchList: React.FC<BranchListProps> = ({ tenantId, userRole }) =>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Branch Assets (Staff & Fleet) Modal */}
+      {selectedBranchAssets && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem',
+        }}>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '14px',
+            width: '100%',
+            maxWidth: '680px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1.75rem',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <Building2 size={22} style={{ color: 'var(--accent-cyan)' }} />
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                    {selectedBranchAssets.name}
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    Hub Code: <strong>{selectedBranchAssets.branch_code}</strong> • {selectedBranchAssets.city}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedBranchAssets(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Asset Tabs */}
+            <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: '1rem' }}>
+              <button
+                onClick={() => setAssetTab('employees')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.6rem 0.85rem',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: assetTab === 'employees' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                  color: assetTab === 'employees' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <Users size={16} />
+                <span>Personnel ({branchEmployees.length})</span>
+              </button>
+              <button
+                onClick={() => setAssetTab('vehicles')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.6rem 0.85rem',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: assetTab === 'vehicles' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                  color: assetTab === 'vehicles' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <Truck size={16} />
+                <span>Stationed Vehicles ({branchVehicles.length})</span>
+              </button>
+            </div>
+
+            {/* Asset Content */}
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '200px' }}>
+              {branchAssetsLoading ? (
+                <div style={{ textAlign: 'center', padding: '3rem' }}>
+                  <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem', color: 'var(--accent-cyan)' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading hub resources...</p>
+                </div>
+              ) : branchAssetsError ? (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  color: '#fda4af',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}>
+                  <AlertCircle size={16} />
+                  <span>{branchAssetsError}</span>
+                </div>
+              ) : assetTab === 'employees' ? (
+                branchEmployees.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    No personnel currently assigned to this delivery hub.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {branchEmployees.map((emp) => (
+                      <div
+                        key={emp.id}
+                        style={{
+                          padding: '0.85rem 1rem',
+                          borderRadius: '8px',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid var(--border-subtle)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 700,
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '4px',
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: 'var(--accent-cyan)',
+                            }}>
+                              {emp.employee_code}
+                            </span>
+                            <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                              {emp.first_name} {emp.last_name}
+                            </strong>
+                          </div>
+                          <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            {emp.designation} {emp.phone ? `• ${emp.phone}` : ''}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '10px',
+                            background: 'rgba(168, 85, 247, 0.15)',
+                            color: '#c084fc',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
+                          }}>
+                            {emp.operational_role}
+                          </span>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '10px',
+                            background: emp.availability_status === 'AVAILABLE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                            color: emp.availability_status === 'AVAILABLE' ? '#34d399' : '#fbbf24',
+                            border: `1px solid ${emp.availability_status === 'AVAILABLE' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                          }}>
+                            {emp.availability_status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                branchVehicles.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    No fleet vehicles currently stationed at this delivery hub.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {branchVehicles.map((veh) => (
+                      <div
+                        key={veh.id}
+                        style={{
+                          padding: '0.85rem 1rem',
+                          borderRadius: '8px',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid var(--border-subtle)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '4px',
+                              background: 'rgba(245, 158, 11, 0.15)',
+                              color: 'var(--accent-amber)',
+                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                            }}>
+                              {veh.registration_number}
+                            </span>
+                            <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                              {veh.make_model || veh.vehicle_type}
+                            </strong>
+                          </div>
+                          <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            Type: {veh.vehicle_type} • Payload: {veh.max_weight_kg} kg • Volume: {veh.max_volume_cbm} m³
+                            {veh.current_driver_name ? ` • Driver: ${veh.current_driver_name}` : ' • (Unassigned)'}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '10px',
+                            background: veh.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                            color: veh.status === 'ACTIVE' ? '#34d399' : '#fda4af',
+                            border: `1px solid ${veh.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`,
+                          }}>
+                            {veh.status}
+                          </span>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '10px',
+                            background: veh.availability_status === 'AVAILABLE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                            color: veh.availability_status === 'AVAILABLE' ? '#34d399' : '#60a5fa',
+                            border: `1px solid ${veh.availability_status === 'AVAILABLE' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                          }}>
+                            {veh.availability_status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                onClick={() => setSelectedBranchAssets(null)}
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
