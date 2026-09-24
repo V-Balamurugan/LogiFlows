@@ -185,11 +185,11 @@ func SetupRouter(params RouterParams) *gin.Engine {
 								if params.ParcelHandler != nil {
 									parcelRoutes := tenantScoped.Group("/parcels")
 									{
-										parcelRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.ParcelHandler.Create)
+										parcelRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.ParcelHandler.Create)
 										parcelRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.ParcelHandler.List)
 										parcelRoutes.POST("/scan", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.ParcelHandler.Scan)
 										parcelRoutes.GET("/:parcel_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.ParcelHandler.Get)
-										parcelRoutes.PATCH("/:parcel_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.ParcelHandler.Update)
+										parcelRoutes.PATCH("/:parcel_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.ParcelHandler.Update)
 										parcelRoutes.PATCH("/:parcel_id/status", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.ParcelHandler.UpdateStatus)
 										parcelRoutes.GET("/:parcel_id/timeline", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.ParcelHandler.GetTimeline)
 										parcelRoutes.GET("/:parcel_id/qr", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.ParcelHandler.GetQRCode)
@@ -200,7 +200,7 @@ func SetupRouter(params RouterParams) *gin.Engine {
 								if params.DeliveryHandler != nil {
 									deliveryRoutes := tenantScoped.Group("/deliveries")
 									{
-										deliveryRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.DeliveryHandler.Create)
+										deliveryRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.DeliveryHandler.Create)
 										deliveryRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.DeliveryHandler.List)
 										deliveryRoutes.GET("/my-tasks", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.DeliveryHandler.GetMyTasks)
 										deliveryRoutes.GET("/:delivery_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.DeliveryHandler.Get)
@@ -215,11 +215,11 @@ func SetupRouter(params RouterParams) *gin.Engine {
 								if params.TransferHandler != nil {
 									transferRoutes := tenantScoped.Group("/transfers")
 									{
-										transferRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.TransferHandler.Create)
-										transferRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.TransferHandler.List)
-										transferRoutes.GET("/:transfer_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.TransferHandler.Get)
-										transferRoutes.POST("/:transfer_id/dispatch", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.TransferHandler.Dispatch)
-										transferRoutes.POST("/:transfer_id/receive", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.TransferHandler.Receive)
+										transferRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.TransferHandler.Create)
+										transferRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.TransferHandler.List)
+										transferRoutes.GET("/:transfer_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.TransferHandler.Get)
+										transferRoutes.POST("/:transfer_id/dispatch", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.TransferHandler.Dispatch)
+										transferRoutes.POST("/:transfer_id/receive", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.TransferHandler.Receive)
 									}
 								}
 							}

@@ -87,6 +87,11 @@ func (s *transferService) CreateTransfer(ctx context.Context, tenantID, actorID 
 		return nil, err
 	}
 
+	var createdBy *uuid.UUID
+	if actorID != uuid.Nil {
+		createdBy = &actorID
+	}
+
 	transfer := &BranchTransfer{
 		TenantID:            tenantID,
 		TransferNumber:      transferNumber,
@@ -96,7 +101,7 @@ func (s *transferService) CreateTransfer(ctx context.Context, tenantID, actorID 
 		VehicleID:           vID,
 		Status:              StatusPending,
 		Notes:               req.Notes,
-		CreatedBy:           &actorID,
+		CreatedBy:           createdBy,
 	}
 
 	if err := s.repo.CreateTransfer(ctx, transfer, parcelUUIDs); err != nil {

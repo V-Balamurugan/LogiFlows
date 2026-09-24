@@ -84,6 +84,10 @@ func (r *pgRepository) CreateParcel(ctx context.Context, p *Parcel) error {
 		RETURNING id, created_at, updated_at;
 	`
 
+	if p.CreatedBy != nil && *p.CreatedBy == uuid.Nil {
+		p.CreatedBy = nil
+	}
+
 	err = tx.QueryRow(
 		ctx,
 		insertQuery,
@@ -427,6 +431,10 @@ func (r *pgRepository) UpdateParcelStatus(ctx context.Context, tenantID, parcelI
 		return fmt.Errorf("failed to update parcel status: %w", err)
 	}
 
+	if actorID != nil && *actorID == uuid.Nil {
+		actorID = nil
+	}
+
 	historyQuery := `
 		INSERT INTO parcel_status_history (
 			tenant_id, parcel_id, from_status, to_status, branch_id, actor_id, actor_role, notes, created_at
@@ -516,6 +524,10 @@ func (r *pgRepository) GetPublicTimeline(ctx context.Context, trackingNumber str
 }
 
 func (r *pgRepository) RecordCustodyEvent(ctx context.Context, event *ParcelCustodyEvent) error {
+	if event.EmployeeID != nil && *event.EmployeeID == uuid.Nil {
+		event.EmployeeID = nil
+	}
+
 	query := `
 		INSERT INTO parcel_custody_events (
 			tenant_id, parcel_id, employee_id, from_branch_id, to_branch_id,

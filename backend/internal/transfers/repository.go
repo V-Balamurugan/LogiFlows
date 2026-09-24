@@ -56,6 +56,10 @@ func (r *pgRepository) CreateTransfer(ctx context.Context, t *BranchTransfer, pa
 		t.Status = StatusPending
 	}
 
+	if t.CreatedBy != nil && *t.CreatedBy == uuid.Nil {
+		t.CreatedBy = nil
+	}
+
 	insertTransferQuery := `
 		INSERT INTO branch_transfers (
 			tenant_id, transfer_number, source_branch_id, destination_branch_id,

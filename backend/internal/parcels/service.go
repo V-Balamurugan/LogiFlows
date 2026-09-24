@@ -37,6 +37,13 @@ func NewService(repo Repository, branchRepo branches.Repository) Service {
 }
 
 func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid.UUID, req CreateParcelRequest) (*Parcel, error) {
+	if strings.TrimSpace(req.DimensionsCM) == "" {
+		req.DimensionsCM = "30x20x15"
+	}
+	if strings.TrimSpace(req.ServiceType) == "" {
+		req.ServiceType = ServiceTypeStandard
+	}
+
 	if err := ValidateCreateRequest(req); err != nil {
 		return nil, err
 	}
@@ -77,6 +84,11 @@ func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid
 		declaredVal = *req.DeclaredValue
 	}
 
+	var createdBy *uuid.UUID
+	if actorID != uuid.Nil {
+		createdBy = &actorID
+	}
+
 	parcel := &Parcel{
 		TenantID:            tenantID,
 		TrackingNumber:      trackingNum,
@@ -97,7 +109,7 @@ func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid
 		DeclaredValue:       declaredVal,
 		Status:              StatusCreated,
 		SpecialInstructions: req.SpecialInstructions,
-		CreatedBy:           &actorID,
+		CreatedBy:           createdBy,
 	}
 
 	if err := s.repo.CreateParcel(ctx, parcel); err != nil {
@@ -208,7 +220,12 @@ func (s *parcelService) UpdateParcelStatus(ctx context.Context, tenantID, parcel
 		notes = strings.TrimSpace(*req.Notes)
 	}
 
-	if err := s.repo.UpdateParcelStatus(ctx, tenantID, parcelID, toStatus, branchUUID, &actorID, actorRole, notes); err != nil {
+	var actorPtr *uuid.UUID
+	if actorID != uuid.Nil {
+		actorPtr = &actorID
+	}
+
+	if err := s.repo.UpdateParcelStatus(ctx, tenantID, parcelID, toStatus, branchUUID, actorPtr, actorRole, notes); err != nil {
 		return nil, err
 	}
 
@@ -292,10 +309,15 @@ func (s *parcelService) ScanParcel(ctx context.Context, tenantID, actorID uuid.U
 		bID = p.CurrentBranchID
 	}
 
+	var empID *uuid.UUID
+	if actorID != uuid.Nil {
+		empID = &actorID
+	}
+
 	custodyEvent := &ParcelCustodyEvent{
 		TenantID:         tenantID,
 		ParcelID:         p.ID,
-		EmployeeID:       &actorID,
+		EmployeeID:       empID,
 		ToBranchID:       bID,
 		EventType:        CustodyEventReceive,
 		SignatureNote:    req.Notes,
