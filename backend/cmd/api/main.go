@@ -13,14 +13,17 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/deliveries"
 	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
 	"github.com/logiflows/logiflows/backend/internal/memberships"
 	"github.com/logiflows/logiflows/backend/internal/middleware"
+	"github.com/logiflows/logiflows/backend/internal/parcels"
 	"github.com/logiflows/logiflows/backend/internal/redis"
 	"github.com/logiflows/logiflows/backend/internal/server"
 	"github.com/logiflows/logiflows/backend/internal/tenants"
+	"github.com/logiflows/logiflows/backend/internal/transfers"
 	"github.com/logiflows/logiflows/backend/internal/users"
 	"github.com/logiflows/logiflows/backend/internal/vehicles"
 	"github.com/logiflows/logiflows/backend/migrations"
@@ -118,6 +121,19 @@ func main() {
 	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
 	vehicleHandler := vehicles.NewHandler(vehicleService)
 
+	// Phase 4: Parcel, Delivery, and Transfer Handlers
+	parcelRepo := parcels.NewRepository(db.Pool())
+	parcelService := parcels.NewService(parcelRepo, branchRepo)
+	parcelHandler := parcels.NewHandler(parcelService)
+
+	deliveryRepo := deliveries.NewRepository(db.Pool())
+	deliveryService := deliveries.NewService(deliveryRepo, parcelRepo, employeeRepo)
+	deliveryHandler := deliveries.NewHandler(deliveryService, employeeRepo)
+
+	transferRepo := transfers.NewRepository(db.Pool())
+	transferService := transfers.NewService(transferRepo, branchRepo)
+	transferHandler := transfers.NewHandler(transferService)
+
 	authMiddleware := middleware.Auth(tokenService, userRepo)
 	tenantMiddleware := middleware.TenantContext(membershipRepo, tenantRepo)
 
@@ -130,6 +146,9 @@ func main() {
 		BranchHandler:    branchHandler,
 		EmployeeHandler:  employeeHandler,
 		VehicleHandler:   vehicleHandler,
+		ParcelHandler:    parcelHandler,
+		DeliveryHandler:  deliveryHandler,
+		TransferHandler:  transferHandler,
 		AuthMiddleware:   authMiddleware,
 		TenantMiddleware: tenantMiddleware,
 	})
