@@ -18,12 +18,12 @@ const (
 )
 
 var (
-	ErrTransferNotFound       = errors.New("branch transfer manifest not found")
-	ErrInvalidBranches        = errors.New("source_branch_id and destination_branch_id are required")
-	ErrSameBranchTransfer     = errors.New("source and destination branches must be different")
-	ErrNoParcelsSpecified     = errors.New("at least one parcel_id is required to create a transfer manifest")
-	ErrInvalidStatusAction    = errors.New("invalid action for current transfer status")
-	ErrTransferAlreadyReceived= errors.New("transfer manifest is already received")
+	ErrTransferNotFound        = errors.New("branch transfer manifest not found")
+	ErrInvalidBranches         = errors.New("source_branch_id and destination_branch_id are required")
+	ErrSameBranchTransfer      = errors.New("source and destination branches must be different")
+	ErrNoParcelsSpecified      = errors.New("at least one parcel_id is required to create a transfer manifest")
+	ErrInvalidStatusAction     = errors.New("invalid action for current transfer status")
+	ErrTransferAlreadyReceived = errors.New("transfer manifest is already received")
 )
 
 // BranchTransfer represents an inter-branch linehaul manifest.

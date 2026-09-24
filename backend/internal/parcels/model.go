@@ -270,11 +270,11 @@ type ScanParcelRequest struct {
 
 // ScanParcelResponse returned upon successful scan.
 type ScanParcelResponse struct {
-	Parcel         *Parcel   `json:"parcel"`
-	VerifiedAt     time.Time `json:"verified_at"`
-	CurrentBranch  *string   `json:"current_branch,omitempty"`
-	NextAction     string    `json:"next_action"`
-	CustodyHolder  *string   `json:"custody_holder,omitempty"`
+	Parcel        *Parcel   `json:"parcel"`
+	VerifiedAt    time.Time `json:"verified_at"`
+	CurrentBranch *string   `json:"current_branch,omitempty"`
+	NextAction    string    `json:"next_action"`
+	CustodyHolder *string   `json:"custody_holder,omitempty"`
 }
 
 // PublicTrackingMilestone public item.
@@ -287,28 +287,28 @@ type PublicTrackingMilestone struct {
 
 // PublicTrackingResponse sanitized response for unauthenticated customer tracking.
 type PublicTrackingResponse struct {
-	TrackingNumber      string                    `json:"tracking_number"`
-	Status              string                    `json:"status"`
-	ServiceType         string                    `json:"service_type"`
-	OriginCity          string                    `json:"origin_city"`
-	DestinationCity     string                    `json:"destination_city"`
-	WeightKG            float64                   `json:"weight_kg"`
-	CreatedAt           time.Time                 `json:"created_at"`
-	EstimatedDelivery   *time.Time                `json:"estimated_delivery,omitempty"`
-	Milestones          []PublicTrackingMilestone `json:"milestones"`
+	TrackingNumber    string                    `json:"tracking_number"`
+	Status            string                    `json:"status"`
+	ServiceType       string                    `json:"service_type"`
+	OriginCity        string                    `json:"origin_city"`
+	DestinationCity   string                    `json:"destination_city"`
+	WeightKG          float64                   `json:"weight_kg"`
+	CreatedAt         time.Time                 `json:"created_at"`
+	EstimatedDelivery *time.Time                `json:"estimated_delivery,omitempty"`
+	Milestones        []PublicTrackingMilestone `json:"milestones"`
 }
 
 // ParcelFilter options for listing.
 type ParcelFilter struct {
-	Status         *string
-	OriginBranchID *uuid.UUID
-	DestBranchID   *uuid.UUID
+	Status          *string
+	OriginBranchID  *uuid.UUID
+	DestBranchID    *uuid.UUID
 	CurrentBranchID *uuid.UUID
-	Search         *string
-	DateFrom       *time.Time
-	DateTo         *time.Time
-	Limit          int
-	Offset         int
+	Search          *string
+	DateFrom        *time.Time
+	DateTo          *time.Time
+	Limit           int
+	Offset          int
 }
 
 // ParcelListResponse wraps list results with pagination metadata.
