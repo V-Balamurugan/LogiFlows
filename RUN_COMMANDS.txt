@@ -1,0 +1,116 @@
+================================================================================
+                    LOGIFLOWS - COMMANDS TO RUN THE ENTIRE PROJECT
+================================================================================
+
+================================================================================
+1. ONE-COMMAND EXECUTION (ALL SERVICES TOGETHER)
+================================================================================
+
+OPTION A: Double-Click (Easiest on Windows)
+--------------------------------------------------------------------------------
+Simply double-click the file:
+   run-all.bat
+
+This will start:
+   1. Docker Compose (PostgreSQL with PostGIS + Redis)
+   2. Go Backend REST API (Port 8080)
+   3. Python FastAPI AI Predictive Intelligence Service (Port 8000)
+   4. React 19 + TypeScript + Vite Web Dashboard (Port 5173)
+   5. Flutter Mobile Web Application (Port 8085)
+   6. Automatically opens your browser to http://localhost:5173
+
+
+OPTION B: From PowerShell
+--------------------------------------------------------------------------------
+Open PowerShell in the LogiFlows root directory and run:
+
+   .\run-all.ps1
+
+Flags (Optional):
+   .\run-all.ps1 -SkipMobile          # Skip Flutter mobile app
+   .\run-all.ps1 -Mode Background     # Run all in background without popup windows
+
+
+OPTION C: From Command Prompt (cmd.exe)
+--------------------------------------------------------------------------------
+   run-all.bat
+
+
+OPTION D: Using Make
+--------------------------------------------------------------------------------
+   make run-all
+
+
+================================================================================
+2. HOW TO STOP ALL SERVICES
+================================================================================
+
+OPTION A: Double-Click
+   run-all/stop: double-click stop-all.bat
+
+OPTION B: From PowerShell
+   .\stop-all.ps1
+
+   To also stop Docker containers (PostgreSQL & Redis):
+   .\stop-all.ps1 -StopDocker
+
+OPTION C: Using Make
+   make stop-all
+
+
+================================================================================
+3. INDIVIDUAL SERVICE RUN COMMANDS (STEP-BY-STEP MANUAL)
+================================================================================
+
+STEP 1: Start Docker Infrastructure (PostgreSQL + PostGIS & Redis)
+------------------------------------------------------------------
+   docker compose up -d postgres redis
+
+   Verify status:
+   docker compose ps
+
+
+STEP 2: Start Go Backend API (Port 8080)
+------------------------------------------------------------------
+   cd backend
+   go run ./cmd/api/main.go
+
+   (Or run pre-compiled binary):
+   .\bin\api.exe
+
+
+STEP 3: Start AI Predictive Service (Port 8000)
+------------------------------------------------------------------
+   cd ai-service
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+STEP 4: Start Frontend Web Dashboard (Port 5173)
+------------------------------------------------------------------
+   cd frontend
+   npm run dev -- --host 0.0.0.0 --port 5173
+
+
+STEP 5: Start Flutter Mobile Application (Port 8085)
+------------------------------------------------------------------
+   cd mobile
+   C:\Users\PUTTU\flutter\bin\flutter.bat run -d web-server --web-port 8085 --web-hostname 0.0.0.0
+
+   (Or directly into Microsoft Edge):
+   C:\Users\PUTTU\flutter\bin\flutter.bat run -d edge
+
+
+================================================================================
+4. ALL ACCESS URLS & ENDPOINTS
+================================================================================
+
+* Web Operations Dashboard : http://localhost:5173
+* Flutter Mobile Web Client : http://localhost:8085
+* Go Backend REST API       : http://localhost:8080
+* Go Backend Swagger UI Docs: http://localhost:8080/swagger/index.html
+* AI Service REST API       : http://localhost:8000
+* AI Service Swagger UI Docs: http://localhost:8000/docs
+* PostgreSQL Database       : localhost:5432 (User: postgres, DB: logiflows_dev)
+* Redis Cache & Pub/Sub     : localhost:6379
+
+================================================================================

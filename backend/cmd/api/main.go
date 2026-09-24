@@ -8,12 +8,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/logiflows/logiflows/backend/internal/audit"
+	"github.com/logiflows/logiflows/backend/internal/auth"
+	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
+	"github.com/logiflows/logiflows/backend/internal/customers"
 	"github.com/logiflows/logiflows/backend/internal/database"
+	"github.com/logiflows/logiflows/backend/internal/deliveries"
+	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
 	"github.com/logiflows/logiflows/backend/internal/logger"
+	"github.com/logiflows/logiflows/backend/internal/memberships"
+	"github.com/logiflows/logiflows/backend/internal/middleware"
+	"github.com/logiflows/logiflows/backend/internal/parcels"
 	"github.com/logiflows/logiflows/backend/internal/redis"
 	"github.com/logiflows/logiflows/backend/internal/server"
+	"github.com/logiflows/logiflows/backend/internal/tenants"
+	"github.com/logiflows/logiflows/backend/internal/transfers"
+	"github.com/logiflows/logiflows/backend/internal/users"
+	"github.com/logiflows/logiflows/backend/internal/vehicles"
 	"github.com/logiflows/logiflows/backend/migrations"
 )
 
@@ -82,9 +95,69 @@ func main() {
 	}()
 	log.Info("Redis connection established successfully")
 
-	// 7. Setup Handlers and Router
+	// 7. Setup Repositories, Services, and Handlers
+	userRepo := users.NewRepository(db.Pool())
+	tenantRepo := tenants.NewRepository(db.Pool())
+	membershipRepo := memberships.NewRepository(db.Pool())
+	auditRepo := audit.NewRepository(db.Pool())
+
+	tokenRepo := auth.NewRefreshTokenRepository(db.Pool())
+	tokenService := auth.NewTokenService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.Issuer)
+	authService := auth.NewService(db.Pool(), userRepo, tenantRepo, membershipRepo, auditRepo, tokenRepo, tokenService)
+	tenantService := tenants.NewService(db.Pool(), tenantRepo, membershipRepo, userRepo, auditRepo)
+
 	healthHandler := health.NewHandler(db, cache)
-	router := server.SetupRouter(cfg, log, healthHandler)
+	authHandler := auth.NewHandler(authService)
+	tenantHandler := tenants.NewHandler(tenantService)
+
+	branchRepo := branches.NewRepository(db.Pool())
+	branchService := branches.NewService(branchRepo, auditRepo)
+	branchHandler := branches.NewHandler(branchService)
+
+	employeeRepo := employees.NewRepository(db.Pool())
+	employeeService := employees.NewService(employeeRepo, branchRepo, auditRepo, userRepo, membershipRepo)
+	employeeHandler := employees.NewHandler(employeeService)
+
+	vehicleRepo := vehicles.NewRepository(db.Pool())
+	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
+	vehicleHandler := vehicles.NewHandler(vehicleService)
+
+	// Phase 4: Customer, Parcel, Delivery, and Transfer Handlers
+	customerRepo := customers.NewRepository(db.Pool())
+	customerService := customers.NewService(customerRepo)
+	customerHandler := customers.NewHandler(customerService)
+
+	parcelRepo := parcels.NewRepository(db.Pool())
+	parcelService := parcels.NewService(parcelRepo, branchRepo, customerRepo)
+	parcelHandler := parcels.NewHandler(parcelService)
+
+	deliveryRepo := deliveries.NewRepository(db.Pool())
+	deliveryService := deliveries.NewService(deliveryRepo, parcelRepo, employeeRepo)
+	deliveryHandler := deliveries.NewHandler(deliveryService, employeeRepo)
+
+	transferRepo := transfers.NewRepository(db.Pool())
+	transferService := transfers.NewService(transferRepo, branchRepo)
+	transferHandler := transfers.NewHandler(transferService)
+
+	authMiddleware := middleware.Auth(tokenService, userRepo)
+	tenantMiddleware := middleware.TenantContext(membershipRepo, tenantRepo)
+
+	router := server.SetupRouter(server.RouterParams{
+		Cfg:              cfg,
+		Log:              log,
+		HealthHandler:    healthHandler,
+		AuthHandler:      authHandler,
+		TenantHandler:    tenantHandler,
+		BranchHandler:    branchHandler,
+		EmployeeHandler:  employeeHandler,
+		VehicleHandler:   vehicleHandler,
+		CustomerHandler:  customerHandler,
+		ParcelHandler:    parcelHandler,
+		DeliveryHandler:  deliveryHandler,
+		TransferHandler:  transferHandler,
+		AuthMiddleware:   authMiddleware,
+		TenantMiddleware: tenantMiddleware,
+	})
 
 	// 8. Initialize HTTP Server
 	srv := server.New(cfg, log, router)
