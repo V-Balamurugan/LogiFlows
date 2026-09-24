@@ -13,7 +13,10 @@ import {
   Users,
   Truck,
   Activity,
-  UserCheck
+  UserCheck,
+  Package,
+  ArrowLeftRight,
+  Search
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/auth/AuthScreen';
@@ -23,6 +26,10 @@ import { BranchList } from './components/resources/BranchList';
 import { EmployeeList } from './components/resources/EmployeeList';
 import { VehicleList } from './components/resources/VehicleList';
 import { EmployeeSelfProfile } from './components/resources/EmployeeSelfProfile';
+import { ParcelList } from './components/parcels/ParcelList';
+import { DeliveryTaskList } from './components/deliveries/DeliveryTaskList';
+import { BranchTransferList } from './components/transfers/BranchTransferList';
+import { PublicTrackingView } from './components/tracking/PublicTrackingView';
 
 interface BackendReadiness {
   status: string;
@@ -768,7 +775,7 @@ export default function App() {
 
 function MainLayout() {
   const { user, isLoading, activeTenant } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'branches' | 'employees' | 'fleet' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'branches' | 'employees' | 'fleet' | 'parcels' | 'deliveries' | 'transfers' | 'tracking' | 'profile'>('overview');
 
   useEffect(() => {
     if (activeTenant?.role === 'EMPLOYEE') {
@@ -914,6 +921,90 @@ function MainLayout() {
         </button>
 
         <button
+          onClick={() => setActiveTab('parcels')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'parcels' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'parcels' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'parcels' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Package size={17} />
+          Parcels & Cargo
+        </button>
+
+        <button
+          onClick={() => setActiveTab('deliveries')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'deliveries' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'deliveries' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'deliveries' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Truck size={17} color="var(--accent-cyan)" />
+          Last-Mile Dispatch
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transfers')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'transfers' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'transfers' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'transfers' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <ArrowLeftRight size={17} color="var(--accent-purple)" />
+          Linehaul Transfers
+        </button>
+
+        <button
+          onClick={() => setActiveTab('tracking')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem 0.25rem',
+            border: 'none',
+            background: 'none',
+            color: activeTab === 'tracking' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            borderBottom: activeTab === 'tracking' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            fontWeight: activeTab === 'tracking' ? 600 : 500,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Search size={17} color="var(--accent-emerald)" />
+          Customer Tracker
+        </button>
+
+        <button
           onClick={() => setActiveTab('profile')}
           style={{
             display: 'flex',
@@ -980,6 +1071,40 @@ function MainLayout() {
               <p>Please select an active tenant organization from the header to manage fleet vehicles.</p>
             </div>
           )
+        )}
+
+        {activeTab === 'parcels' && (
+          activeTenant ? (
+            <ParcelList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage parcels.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'deliveries' && (
+          activeTenant ? (
+            <DeliveryTaskList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage deliveries.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'transfers' && (
+          activeTenant ? (
+            <BranchTransferList tenantId={activeTenant.id} userRole={activeTenant.role} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+              <p>Please select an active tenant organization from the header to manage linehaul transfers.</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'tracking' && (
+          <PublicTrackingView />
         )}
 
         {activeTab === 'profile' && (

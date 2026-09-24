@@ -5,6 +5,23 @@ import type {
   ApiSuccessEnvelope, 
   ApiErrorEnvelope 
 } from '../types/auth';
+import type {
+  Parcel,
+  ParcelListResponse,
+  CreateParcelPayload,
+  UpdateParcelPayload,
+  ParcelStatusHistory,
+  DeliveryTask,
+  CreateDeliveryTaskPayload,
+  RecordDeliveryAttemptPayload,
+  SubmitDeliveryProofPayload,
+  DeliveryAttempt,
+  DeliveryProof,
+  BranchTransfer,
+  CreateBranchTransferPayload,
+  PublicTrackingResponse,
+  ScanParcelResponse,
+} from '../types/parcels';
 
 const API_BASE = 'http://localhost:8080/api/v1';
 const TOKEN_KEY = 'logiflows_access_token';
@@ -335,6 +352,134 @@ export const api = {
       method: 'GET',
     });
   },
+
+  // --- Phase 4: Parcels ---
+  listParcels: (tenantId: string, filter: { status?: string; origin_branch_id?: string; destination_branch_id?: string; search?: string; page?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filter.status) params.set('status', filter.status);
+    if (filter.origin_branch_id) params.set('origin_branch_id', filter.origin_branch_id);
+    if (filter.destination_branch_id) params.set('destination_branch_id', filter.destination_branch_id);
+    if (filter.search) params.set('search', filter.search);
+    if (filter.page) params.set('page', String(filter.page));
+    if (filter.limit) params.set('limit', String(filter.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<ParcelListResponse>(`/tenants/${tenantId}/parcels${qs}`, { method: 'GET' });
+  },
+
+  getParcel: (tenantId: string, parcelId: string) =>
+    request<Parcel>(`/tenants/${tenantId}/parcels/${parcelId}`, { method: 'GET' }),
+
+  createParcel: (tenantId: string, payload: CreateParcelPayload) =>
+    request<Parcel>(`/tenants/${tenantId}/parcels`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateParcel: (tenantId: string, parcelId: string, payload: UpdateParcelPayload) =>
+    request<Parcel>(`/tenants/${tenantId}/parcels/${parcelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  updateParcelStatus: (tenantId: string, parcelId: string, status: string, notes?: string, branchId?: string) =>
+    request<Parcel>(`/tenants/${tenantId}/parcels/${parcelId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes, branch_id: branchId }),
+    }),
+
+  getParcelTimeline: (tenantId: string, parcelId: string) =>
+    request<ParcelStatusHistory[]>(`/tenants/${tenantId}/parcels/${parcelId}/timeline`, { method: 'GET' }),
+
+  getParcelQRCode: (tenantId: string, parcelId: string) =>
+    request<{ parcel_id: string; qr_payload: string }>(`/tenants/${tenantId}/parcels/${parcelId}/qr`, { method: 'GET' }),
+
+  scanParcel: (tenantId: string, payload: { qr_payload?: string; tracking_number?: string; branch_id?: string; notes?: string }) =>
+    request<ScanParcelResponse>(`/tenants/${tenantId}/parcels/scan`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // --- Phase 4: Deliveries ---
+  listDeliveryTasks: (tenantId: string, filter: { status?: string; driver_id?: string; priority?: string; page?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filter.status) params.set('status', filter.status);
+    if (filter.driver_id) params.set('driver_id', filter.driver_id);
+    if (filter.priority) params.set('priority', filter.priority);
+    if (filter.page) params.set('page', String(filter.page));
+    if (filter.limit) params.set('limit', String(filter.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<{ tasks: DeliveryTask[]; total: number }>(`/tenants/${tenantId}/deliveries${qs}`, { method: 'GET' });
+  },
+
+  getMyDeliveryTasks: (tenantId: string) =>
+    request<{ tasks: DeliveryTask[]; total: number }>(`/tenants/${tenantId}/deliveries/my-tasks`, { method: 'GET' }),
+
+  getDeliveryTask: (tenantId: string, deliveryId: string) =>
+    request<DeliveryTask>(`/tenants/${tenantId}/deliveries/${deliveryId}`, { method: 'GET' }),
+
+  createDeliveryTask: (tenantId: string, payload: CreateDeliveryTaskPayload) =>
+    request<DeliveryTask>(`/tenants/${tenantId}/deliveries`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateDeliveryTaskStatus: (tenantId: string, deliveryId: string, status: string, notes?: string, failureReason?: string) =>
+    request<DeliveryTask>(`/tenants/${tenantId}/deliveries/${deliveryId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes, failure_reason: failureReason }),
+    }),
+
+  recordDeliveryAttempt: (tenantId: string, deliveryId: string, payload: RecordDeliveryAttemptPayload) =>
+    request<DeliveryAttempt>(`/tenants/${tenantId}/deliveries/${deliveryId}/attempt`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getDeliveryAttempts: (tenantId: string, deliveryId: string) =>
+    request<DeliveryAttempt[]>(`/tenants/${tenantId}/deliveries/${deliveryId}/attempts`, { method: 'GET' }),
+
+  submitDeliveryProof: (tenantId: string, deliveryId: string, payload: SubmitDeliveryProofPayload) =>
+    request<DeliveryProof>(`/tenants/${tenantId}/deliveries/${deliveryId}/proof`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // --- Phase 4: Branch Transfers ---
+  listBranchTransfers: (tenantId: string, filter: { status?: string; origin_branch_id?: string; destination_branch_id?: string; page?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filter.status) params.set('status', filter.status);
+    if (filter.origin_branch_id) params.set('origin_branch_id', filter.origin_branch_id);
+    if (filter.destination_branch_id) params.set('destination_branch_id', filter.destination_branch_id);
+    if (filter.page) params.set('page', String(filter.page));
+    if (filter.limit) params.set('limit', String(filter.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<{ transfers: BranchTransfer[]; total: number }>(`/tenants/${tenantId}/transfers${qs}`, { method: 'GET' });
+  },
+
+  getBranchTransfer: (tenantId: string, transferId: string) =>
+    request<BranchTransfer>(`/tenants/${tenantId}/transfers/${transferId}`, { method: 'GET' }),
+
+  createBranchTransfer: (tenantId: string, payload: CreateBranchTransferPayload) =>
+    request<BranchTransfer>(`/tenants/${tenantId}/transfers`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  dispatchBranchTransfer: (tenantId: string, transferId: string, notes?: string) =>
+    request<BranchTransfer>(`/tenants/${tenantId}/transfers/${transferId}/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    }),
+
+  receiveBranchTransfer: (tenantId: string, transferId: string, parcelIds?: string[], notes?: string) =>
+    request<BranchTransfer>(`/tenants/${tenantId}/transfers/${transferId}/receive`, {
+      method: 'POST',
+      body: JSON.stringify({ parcel_ids: parcelIds, notes }),
+    }),
+
+  // --- Phase 4: Customer Tracking ---
+  getPublicTracking: (trackingNumber: string) =>
+    request<PublicTrackingResponse>(`/tracking/${encodeURIComponent(trackingNumber)}`, { method: 'GET' }),
 };
 
 
