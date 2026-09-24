@@ -40,7 +40,12 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	expectedTables := []string{"users", "tenants", "tenant_memberships", "audit_logs", "refresh_tokens", "branches", "employees", "vehicles", "vehicle_assignments", "tenant_employee_sequences"}
+	expectedTables := []string{
+		"users", "tenants", "tenant_memberships", "audit_logs", "refresh_tokens",
+		"branches", "employees", "vehicles", "vehicle_assignments", "tenant_employee_sequences",
+		"tenant_parcel_sequences", "parcels", "parcel_status_history", "parcel_custody_events",
+		"branch_transfers", "branch_transfer_parcels", "delivery_tasks", "delivery_attempts", "delivery_proofs",
+	}
 	for _, table := range expectedTables {
 		var exists bool
 		query := `SELECT EXISTS (
@@ -80,6 +85,19 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 	if !empAvailColExists {
 		t.Errorf("expected column availability_status to exist on employees table")
 	}
+
+	// 5. Verify Phase 4 parcels tracking_number and qr_code_payload column exists
+	var parcelTrackingColExists bool
+	parcelColQuery := `SELECT EXISTS (
+		SELECT FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'parcels' AND column_name = 'tracking_number'
+	)`
+	if err := conn.QueryRow(ctx, parcelColQuery).Scan(&parcelTrackingColExists); err != nil {
+		t.Fatalf("failed to query column existence for parcels.tracking_number: %v", err)
+	}
+	if !parcelTrackingColExists {
+		t.Errorf("expected column tracking_number to exist on parcels table")
+	}
 }
 
 func TestMigrations_RollbackAndReapply(t *testing.T) {
@@ -98,7 +116,12 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 
 	log := logger.Init("test", "debug")
 
-	// 1. Rollback latest migration (00007_phase3_operational_resources)
+	// 1. Ensure migrations are up first
+	if err := migrations.RunUp(ctx, cfg.Database.DSN(), log); err != nil {
+		t.Fatalf("failed to ensure migrations are up: %v", err)
+	}
+
+	// 2. Rollback latest migration (00008_create_parcel_delivery_lifecycle)
 	defer func() {
 		_ = migrations.RunUp(context.Background(), cfg.Database.DSN(), log)
 	}()
@@ -113,29 +136,29 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Verify tenant_employee_sequences table is dropped after rollback of migration 00007
+	// Verify tenant_parcel_sequences table is dropped after rollback of migration 00008
 	var seqTableExists bool
 	query := `SELECT EXISTS (
 		SELECT FROM information_schema.tables 
-		WHERE table_schema = 'public' AND table_name = 'tenant_employee_sequences'
+		WHERE table_schema = 'public' AND table_name = 'tenant_parcel_sequences'
 	)`
 	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
-		t.Fatalf("failed to check tenant_employee_sequences existence: %v", err)
+		t.Fatalf("failed to check tenant_parcel_sequences existence: %v", err)
 	}
 	if seqTableExists {
-		t.Errorf("expected tenant_employee_sequences table to be dropped after rollback")
+		t.Errorf("expected tenant_parcel_sequences table to be dropped after rollback")
 	}
 
-	// 2. Re-apply migration 00007
+	// 3. Re-apply migration 00008
 	if err := migrations.RunUp(ctx, cfg.Database.DSN(), log); err != nil {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Verify tenant_employee_sequences table is recreated
+	// Verify tenant_parcel_sequences table is recreated
 	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
-		t.Fatalf("failed to check tenant_employee_sequences re-creation: %v", err)
+		t.Fatalf("failed to check tenant_parcel_sequences re-creation: %v", err)
 	}
 	if !seqTableExists {
-		t.Errorf("expected tenant_employee_sequences table to exist after re-applying migration")
+		t.Errorf("expected tenant_parcel_sequences table to exist after re-applying migration")
 	}
 }
