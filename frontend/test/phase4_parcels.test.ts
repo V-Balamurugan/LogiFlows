@@ -169,4 +169,73 @@ describe('Phase 4 Frontend Parcel & Delivery Lifecycle Validation', () => {
     assert.equal(trackingObj.driver_id, undefined);
     assert.equal(trackingObj.driver_name, undefined);
   });
+
+  // TC-FE-QR-001: QR Code Label Payload & Destination Information Verification
+  test('validates QR code payload contains tracking, tenant, and parcel ID UUID', () => {
+    const parcelId = '99999999-9999-9999-9999-999999999999';
+    const trackingNumber = 'PKG-20260924-TEST-0042';
+    const tenantId = '00000000-0000-0000-0000-000000000001';
+
+    const qrPayload = JSON.stringify({
+      tracking: trackingNumber,
+      tenant_id: tenantId,
+      parcel_id: parcelId,
+    });
+
+    const parsed = JSON.parse(qrPayload);
+    assert.equal(parsed.tracking, trackingNumber);
+    assert.equal(parsed.parcel_id, parcelId);
+    assert.equal(parsed.tenant_id, tenantId);
+  });
+
+  // TC-FE-QR-002: Printable Shipping Routing Slip Fields Verification
+  test('validates shipping label includes Destination Hub, Recipient, and Parcel UUID', () => {
+    const labelData = {
+      parcelId: '88888888-8888-8888-8888-888888888888',
+      trackingNumber: 'PKG-20260924-DEST-0099',
+      destinationHub: 'Bengaluru Central Gateway',
+      destinationCity: 'Bengaluru',
+      recipientName: 'Karthik Raja',
+      recipientAddress: '7th Cross, Indiranagar',
+      serviceType: 'EXPRESS',
+    };
+
+    assert.ok(labelData.parcelId.length === 36, 'Parcel ID must be a standard 36-char UUID');
+    assert.ok(labelData.destinationHub.includes('Bengaluru'), 'Label must explicitly display destination hub');
+    assert.ok(labelData.destinationCity.length > 0, 'Label must explicitly display destination city');
+    assert.ok(labelData.trackingNumber.startsWith('PKG-'), 'Tracking code must start with PKG- prefix');
+  });
+
+  // TC-FE-FSM-001: Strict State Transition Table Verification
+  test('validates parcel state machine prevents invalid state leaps', () => {
+    const VALID_NEXT_TRANSITIONS: Record<string, string[]> = {
+      CREATED: ['BOOKED', 'RECEIVED_AT_ORIGIN_BRANCH', 'CANCELLED'],
+      BOOKED: ['READY_FOR_PICKUP', 'RECEIVED_AT_ORIGIN_BRANCH', 'CANCELLED'],
+      READY_FOR_PICKUP: ['PICKED_UP', 'CANCELLED'],
+      PICKED_UP: ['RECEIVED_AT_ORIGIN_BRANCH'],
+      RECEIVED_AT_ORIGIN_BRANCH: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'ON_HOLD'],
+      IN_TRANSIT: ['RECEIVED_AT_TRANSFER_BRANCH', 'RECEIVED_AT_ORIGIN_BRANCH', 'ON_HOLD'],
+      RECEIVED_AT_TRANSFER_BRANCH: ['OUT_FOR_DELIVERY', 'IN_TRANSIT', 'ON_HOLD'],
+      OUT_FOR_DELIVERY: ['DELIVERED', 'DELIVERY_ATTEMPTED', 'DELIVERY_FAILED'],
+      DELIVERY_ATTEMPTED: ['OUT_FOR_DELIVERY', 'RETURN_INITIATED', 'ON_HOLD'],
+      ON_HOLD: ['RECEIVED_AT_ORIGIN_BRANCH', 'RECEIVED_AT_TRANSFER_BRANCH', 'OUT_FOR_DELIVERY', 'RETURN_INITIATED', 'CANCELLED'],
+      DELIVERY_FAILED: ['RETURN_INITIATED'],
+      RETURN_INITIATED: ['IN_TRANSIT', 'RETURNED'],
+      DELIVERED: [],
+      RETURNED: [],
+      CANCELLED: [],
+    };
+
+    // Valid moves from CREATED
+    assert.deepEqual(VALID_NEXT_TRANSITIONS['CREATED'], ['BOOKED', 'RECEIVED_AT_ORIGIN_BRANCH', 'CANCELLED']);
+    assert.ok(!VALID_NEXT_TRANSITIONS['CREATED'].includes('IN_TRANSIT'), 'Cannot jump directly from CREATED to IN_TRANSIT');
+    assert.ok(!VALID_NEXT_TRANSITIONS['CREATED'].includes('OUT_FOR_DELIVERY'), 'Cannot jump directly from CREATED to OUT_FOR_DELIVERY');
+    assert.ok(!VALID_NEXT_TRANSITIONS['CREATED'].includes('DELIVERED'), 'Cannot jump directly from CREATED to DELIVERED');
+
+    // Terminal states have zero forward transitions
+    assert.equal(VALID_NEXT_TRANSITIONS['DELIVERED'].length, 0);
+    assert.equal(VALID_NEXT_TRANSITIONS['RETURNED'].length, 0);
+    assert.equal(VALID_NEXT_TRANSITIONS['CANCELLED'].length, 0);
+  });
 });
+

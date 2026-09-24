@@ -12,7 +12,8 @@ import {
   RefreshCw, 
   X,
   MapPin,
-  Scan
+  Scan,
+  Printer
 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { 
@@ -23,11 +24,48 @@ import type {
   ParcelStatusHistory 
 } from '../../types/parcels';
 import type { Branch } from '../../types/resources';
+import { ParcelLabelModal } from './ParcelLabelModal';
 
 interface ParcelListProps {
   tenantId: string;
   userRole?: string;
 }
+
+const VALID_NEXT_TRANSITIONS: Record<ParcelStatus, ParcelStatus[]> = {
+  CREATED: ['BOOKED', 'RECEIVED_AT_ORIGIN_BRANCH', 'CANCELLED'],
+  BOOKED: ['READY_FOR_PICKUP', 'RECEIVED_AT_ORIGIN_BRANCH', 'CANCELLED'],
+  READY_FOR_PICKUP: ['PICKED_UP', 'CANCELLED'],
+  PICKED_UP: ['RECEIVED_AT_ORIGIN_BRANCH'],
+  RECEIVED_AT_ORIGIN_BRANCH: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'ON_HOLD'],
+  IN_TRANSIT: ['RECEIVED_AT_TRANSFER_BRANCH', 'RECEIVED_AT_ORIGIN_BRANCH', 'ON_HOLD'],
+  RECEIVED_AT_TRANSFER_BRANCH: ['OUT_FOR_DELIVERY', 'IN_TRANSIT', 'ON_HOLD'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'DELIVERY_ATTEMPTED', 'DELIVERY_FAILED'],
+  DELIVERY_ATTEMPTED: ['OUT_FOR_DELIVERY', 'RETURN_INITIATED', 'ON_HOLD'],
+  ON_HOLD: ['RECEIVED_AT_ORIGIN_BRANCH', 'RECEIVED_AT_TRANSFER_BRANCH', 'OUT_FOR_DELIVERY', 'RETURN_INITIATED', 'CANCELLED'],
+  DELIVERY_FAILED: ['RETURN_INITIATED'],
+  RETURN_INITIATED: ['IN_TRANSIT', 'RETURNED'],
+  DELIVERED: [],
+  RETURNED: [],
+  CANCELLED: [],
+};
+
+const STATUS_LABELS: Record<ParcelStatus, string> = {
+  CREATED: 'Created (Pending Intake)',
+  BOOKED: 'Booked',
+  READY_FOR_PICKUP: 'Ready for Pickup',
+  PICKED_UP: 'Picked Up by Driver',
+  RECEIVED_AT_ORIGIN_BRANCH: 'Received at Origin Hub',
+  IN_TRANSIT: 'In Transit between Hubs',
+  RECEIVED_AT_TRANSFER_BRANCH: 'Received at Transfer/Delivery Hub',
+  OUT_FOR_DELIVERY: 'Out for Final Delivery',
+  DELIVERY_ATTEMPTED: 'Delivery Attempted',
+  DELIVERED: 'Delivered to Recipient',
+  DELIVERY_FAILED: 'Delivery Failed',
+  RETURN_INITIATED: 'Return Initiated',
+  RETURNED: 'Returned to Sender',
+  CANCELLED: 'Cancelled',
+  ON_HOLD: 'On Hold / Exception',
+};
 
 const STATUS_COLORS: Record<ParcelStatus, { bg: string; text: string; border: string }> = {
   CREATED: { bg: 'rgba(59, 130, 246, 0.15)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
@@ -71,6 +109,8 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [labelParcel, setLabelParcel] = useState<Parcel | null>(null);
 
   // Selected item state
   const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null);
@@ -160,6 +200,34 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
     }
   };
 
+  const handleOpenStatusModal = (p: Parcel) => {
+    setSelectedParcel(p);
+    const valid = VALID_NEXT_TRANSITIONS[p.status] || [];
+    if (valid.length > 0) {
+      setTargetStatus(valid[0]);
+    }
+    setStatusNotes('');
+    setShowStatusModal(true);
+  };
+
+  const handleQuickStatusAdvance = async (parcelId: string, nextStatus: ParcelStatus, notes?: string) => {
+    try {
+      await api.updateParcelStatus(tenantId, parcelId, nextStatus, notes);
+      setSuccessMsg(`Status updated to ${STATUS_LABELS[nextStatus] || nextStatus}!`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+      loadData();
+      if (labelParcel && labelParcel.id === parcelId) {
+        setLabelParcel((prev) => prev ? { ...prev, status: nextStatus } : null);
+      }
+      if (selectedParcel && selectedParcel.id === parcelId) {
+        setSelectedParcel((prev) => prev ? { ...prev, status: nextStatus } : null);
+      }
+    } catch (err: any) {
+      alert(`Status advance failed: ${err.message}`);
+      throw err;
+    }
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.origin_branch_id === formData.destination_branch_id) {
@@ -174,10 +242,12 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
     try {
       setCreateLoading(true);
       setCreateError(null);
-      await api.createParcel(tenantId, formData);
+      const created = await api.createParcel(tenantId, formData);
       setShowCreateModal(false);
-      setSuccessMsg('Parcel registered successfully with automated tracking code!');
-      setTimeout(() => setSuccessMsg(null), 4000);
+      setLabelParcel(created);
+      setShowLabelModal(true);
+      setSuccessMsg(`Parcel ${created.tracking_number} registered! QR code & shipping label generated.`);
+      setTimeout(() => setSuccessMsg(null), 5000);
       loadData();
     } catch (err: any) {
       setCreateError(err.message || 'Failed to create parcel');
@@ -490,7 +560,32 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                     </td>
 
                     <td style={{ padding: '1rem', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', alignItems: 'center' }}>
+                        {/* Direct QR & Label Download Button */}
+                        <button
+                          onClick={() => {
+                            setLabelParcel(p);
+                            setShowLabelModal(true);
+                          }}
+                          title="Generate QR code & print/download shipping label with destination and Parcel ID"
+                          style={{
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                            background: 'rgba(56, 189, 248, 0.12)',
+                            color: 'var(--accent-cyan)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <QrCode size={14} />
+                          Label & QR
+                        </button>
+
                         <button
                           onClick={() => handleOpenDetails(p)}
                           style={{
@@ -501,22 +596,57 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                             color: 'var(--text-primary)',
                             fontSize: '0.8rem',
                             cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
                           }}
                         >
-                          <QrCode size={14} color="var(--accent-cyan)" />
                           Details
                         </button>
 
+                        {/* Quick 1-Click Lifecycle Advance */}
+                        {isOperator && (p.status === 'CREATED' || p.status === 'BOOKED') && (
+                          <button
+                            onClick={() => handleQuickStatusAdvance(p.id, 'RECEIVED_AT_ORIGIN_BRANCH', 'Hub intake confirmation')}
+                            title="Intake package at Origin Hub"
+                            style={{
+                              padding: '0.45rem 0.75rem',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              color: 'var(--accent-emerald)',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <CheckCircle2 size={13} />
+                            Intake Hub
+                          </button>
+                        )}
+
+                        {isOperator && p.status === 'IN_TRANSIT' && (
+                          <button
+                            onClick={() => handleQuickStatusAdvance(p.id, 'RECEIVED_AT_TRANSFER_BRANCH', 'Arrived at delivery hub')}
+                            title="Receive cargo at transfer hub"
+                            style={{
+                              padding: '0.45rem 0.75rem',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: 'rgba(6, 182, 212, 0.2)',
+                              color: '#22d3ee',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Receive Hub
+                          </button>
+                        )}
+
                         {isOperator && p.status !== 'DELIVERED' && p.status !== 'CANCELLED' && p.status !== 'RETURNED' && (
                           <button
-                            onClick={() => {
-                              setSelectedParcel(p);
-                              setStatusNotes('');
-                              setShowStatusModal(true);
-                            }}
+                            onClick={() => handleOpenStatusModal(p)}
                             style={{
                               padding: '0.45rem 0.75rem',
                               borderRadius: '6px',
@@ -528,7 +658,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                               cursor: 'pointer'
                             }}
                           >
-                            Update
+                            Transition
                           </button>
                         )}
                       </div>
@@ -744,7 +874,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
           backdropFilter: 'blur(5px)',
         }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '780px', maxHeight: '90vh', overflowY: 'auto', padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '1.4rem', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>
@@ -765,9 +895,35 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                 </div>
               </div>
 
-              <button onClick={() => setShowDetailModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLabelParcel(selectedParcel);
+                    setShowLabelModal(true);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.55rem 1rem',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Printer size={15} />
+                  Print / Download Label & QR
+                </button>
+
+                <button onClick={() => setShowDetailModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* QR Code Payload display */}
@@ -957,7 +1113,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
             {scanResult && (
               <div style={{
                 marginTop: '1.2rem',
-                padding: '1rem',
+                padding: '1.1rem',
                 borderRadius: '8px',
                 background: 'rgba(16, 185, 129, 0.12)',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -967,12 +1123,101 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                   Verified Parcel Authenticity
                 </div>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div><strong>Tracking Code:</strong> <span style={{ fontFamily: 'monospace' }}>{scanResult.parcel?.tracking_number}</span></div>
-                  <div><strong>Current Status:</strong> {scanResult.parcel?.status}</div>
+                  <div><strong>Tracking Code:</strong> <span style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{scanResult.parcel?.tracking_number}</span></div>
+                  <div><strong>Parcel ID:</strong> <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{scanResult.parcel?.id}</span></div>
+                  <div><strong>Current Status:</strong> <span style={{ color: '#38bdf8', fontWeight: 600 }}>{scanResult.parcel?.status}</span></div>
                   <div><strong>Recipient:</strong> {scanResult.parcel?.receiver_name} ({scanResult.parcel?.receiver_address})</div>
                   <div style={{ marginTop: '6px', padding: '6px 10px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--accent-cyan)' }}>
                     <strong>Next Recommended Action:</strong> {scanResult.next_action}
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabelParcel(scanResult.parcel);
+                      setShowLabelModal(true);
+                      setShowScanModal(false);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '160px',
+                      padding: '0.55rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'rgba(30, 41, 59, 0.8)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    <QrCode size={15} color="var(--accent-cyan)" />
+                    Label & QR Code
+                  </button>
+
+                  {(scanResult.parcel?.status === 'CREATED' || scanResult.parcel?.status === 'BOOKED') && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleQuickStatusAdvance(scanResult.parcel.id, 'RECEIVED_AT_ORIGIN_BRANCH', 'Intake via field scanner');
+                        setShowScanModal(false);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: '160px',
+                        padding: '0.55rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'var(--accent-cyan)',
+                        color: '#0f172a',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <CheckCircle2 size={15} />
+                      Confirm Hub Intake
+                    </button>
+                  )}
+
+                  {scanResult.parcel?.status === 'IN_TRANSIT' && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleQuickStatusAdvance(scanResult.parcel.id, 'RECEIVED_AT_TRANSFER_BRANCH', 'Arrived at delivery hub via scanner');
+                        setShowScanModal(false);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: '160px',
+                        padding: '0.55rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'var(--accent-emerald)',
+                        color: '#0f172a',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <CheckCircle2 size={15} />
+                      Confirm Transfer Receipt
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -980,7 +1225,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
         </div>
       )}
 
-      {/* QUICK STATUS UPDATE MODAL */}
+      {/* QUICK STATUS UPDATE MODAL (Strict FSM Valid State Transitions) */}
       {showStatusModal && selectedParcel && (
         <div style={{
           position: 'fixed',
@@ -995,7 +1240,14 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
         }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '1.8rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Update Status: {selectedParcel.tracking_number}</h3>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
+                  Advance Status: {selectedParcel.tracking_number}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Current State: <strong style={{ color: 'var(--accent-cyan)' }}>{selectedParcel.status}</strong>
+                </span>
+              </div>
               <button onClick={() => setShowStatusModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
@@ -1003,20 +1255,26 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
 
             <form onSubmit={handleStatusSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Target Status *</label>
-                <select
-                  value={targetStatus}
-                  onChange={(e) => setTargetStatus(e.target.value as ParcelStatus)}
-                  style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                >
-                  <option value="BOOKED">BOOKED</option>
-                  <option value="RECEIVED_AT_ORIGIN_BRANCH">RECEIVED AT ORIGIN HUB</option>
-                  <option value="IN_TRANSIT">IN TRANSIT</option>
-                  <option value="RECEIVED_AT_TRANSFER_BRANCH">RECEIVED AT TRANSFER HUB</option>
-                  <option value="OUT_FOR_DELIVERY">OUT FOR DELIVERY</option>
-                  <option value="ON_HOLD">ON HOLD</option>
-                  <option value="CANCELLED">CANCELLED</option>
-                </select>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Permitted Next State *
+                </label>
+                {(VALID_NEXT_TRANSITIONS[selectedParcel.status] || []).length === 0 ? (
+                  <div style={{ padding: '0.75rem', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontSize: '0.85rem' }}>
+                    This parcel has reached terminal status ({selectedParcel.status}) and cannot be transitioned further.
+                  </div>
+                ) : (
+                  <select
+                    value={targetStatus}
+                    onChange={(e) => setTargetStatus(e.target.value as ParcelStatus)}
+                    style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  >
+                    {(VALID_NEXT_TRANSITIONS[selectedParcel.status] || []).map((st) => (
+                      <option key={st} value={st}>
+                        {STATUS_LABELS[st] || st.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -1040,7 +1298,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                 </button>
                 <button
                   type="submit"
-                  disabled={statusLoading}
+                  disabled={statusLoading || (VALID_NEXT_TRANSITIONS[selectedParcel.status] || []).length === 0}
                   style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', background: 'var(--accent-cyan)', color: '#0f172a', fontWeight: 600, cursor: 'pointer' }}
                 >
                   {statusLoading ? 'Updating...' : 'Confirm Transition'}
@@ -1050,6 +1308,17 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
           </div>
         </div>
       )}
+
+      {/* SHIPPING LABEL & QR GENERATOR / DOWNLOAD MODAL */}
+      <ParcelLabelModal
+        parcel={labelParcel}
+        branches={branches}
+        isOpen={showLabelModal}
+        onClose={() => setShowLabelModal(false)}
+        onStatusUpdate={async (parcelId, status) => {
+          await handleQuickStatusAdvance(parcelId, status, 'Intake via Label Modal');
+        }}
+      />
     </div>
   );
 };
