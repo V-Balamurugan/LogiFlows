@@ -136,6 +136,11 @@ func (h *Handler) List(c *gin.Context) {
 			filter.DateTo = &t
 		}
 	}
+	if cust := strings.TrimSpace(c.Query("customer_id")); cust != "" {
+		if id, err := uuid.Parse(cust); err == nil {
+			filter.CustomerID = &id
+		}
+	}
 	if l := strings.TrimSpace(c.Query("limit")); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
 			filter.Limit = parsed
@@ -150,6 +155,46 @@ func (h *Handler) List(c *gin.Context) {
 	res, err := h.service.ListParcels(c.Request.Context(), tenantID, filter)
 	if err != nil {
 		response.InternalServerError(c, "Failed to list parcels: "+err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, res)
+}
+
+// GetByCustomer handles GET /api/v1/tenants/:tenant_id/customers/:customer_id/parcels
+func (h *Handler) GetByCustomer(c *gin.Context) {
+	tenantID, ok := contextutil.GetTenantID(c)
+	if !ok {
+		response.Forbidden(c, "MISSING_TENANT_CONTEXT", "Tenant context is required")
+		return
+	}
+
+	customerID, err := uuid.Parse(c.Param("customer_id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid customer_id parameter format", nil)
+		return
+	}
+
+	filter := ParcelFilter{
+		CustomerID: &customerID,
+		Limit:      20,
+		Offset:     0,
+	}
+
+	if l := strings.TrimSpace(c.Query("limit")); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			filter.Limit = parsed
+		}
+	}
+	if o := strings.TrimSpace(c.Query("offset")); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			filter.Offset = parsed
+		}
+	}
+
+	res, err := h.service.ListParcels(c.Request.Context(), tenantID, filter)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve customer parcels: "+err.Error())
 		return
 	}
 

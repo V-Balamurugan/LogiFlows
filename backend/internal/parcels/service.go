@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logiflows/logiflows/backend/internal/branches"
+	"github.com/logiflows/logiflows/backend/internal/customers"
 )
 
 type Service interface {
@@ -25,18 +26,82 @@ type Service interface {
 }
 
 type parcelService struct {
-	repo       Repository
-	branchRepo branches.Repository
+	repo         Repository
+	branchRepo   branches.Repository
+	customerRepo customers.Repository
 }
 
-func NewService(repo Repository, branchRepo branches.Repository) Service {
+func NewService(repo Repository, branchRepo branches.Repository, customerRepo customers.Repository) Service {
 	return &parcelService{
-		repo:       repo,
-		branchRepo: branchRepo,
+		repo:         repo,
+		branchRepo:   branchRepo,
+		customerRepo: customerRepo,
 	}
 }
 
 func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid.UUID, req CreateParcelRequest) (*Parcel, error) {
+	// Auto-fill sender details from customer profile if customer ID is provided
+	var senderCustID *uuid.UUID
+	if req.SenderCustomerID != nil && strings.TrimSpace(*req.SenderCustomerID) != "" {
+		sID, err := uuid.Parse(strings.TrimSpace(*req.SenderCustomerID))
+		if err == nil && sID != uuid.Nil {
+			senderCustID = &sID
+			if s.customerRepo != nil {
+				cust, err := s.customerRepo.GetCustomerByID(ctx, tenantID, sID)
+				if err == nil && cust != nil {
+					if strings.TrimSpace(req.SenderName) == "" {
+						req.SenderName = cust.Name
+					}
+					if strings.TrimSpace(req.SenderPhone) == "" {
+						req.SenderPhone = cust.Phone
+					}
+					if strings.TrimSpace(req.SenderAddress) == "" {
+						addr := cust.AddressLine1
+						if cust.AddressLine2 != nil && *cust.AddressLine2 != "" {
+							addr += ", " + *cust.AddressLine2
+						}
+						addr += ", " + cust.City + ", " + cust.State + " " + cust.PostalCode
+						req.SenderAddress = addr
+					}
+					if req.SenderEmail == nil && cust.Email != nil {
+						req.SenderEmail = cust.Email
+					}
+				}
+			}
+		}
+	}
+
+	// Auto-fill receiver details from customer profile if customer ID is provided
+	var receiverCustID *uuid.UUID
+	if req.ReceiverCustomerID != nil && strings.TrimSpace(*req.ReceiverCustomerID) != "" {
+		rID, err := uuid.Parse(strings.TrimSpace(*req.ReceiverCustomerID))
+		if err == nil && rID != uuid.Nil {
+			receiverCustID = &rID
+			if s.customerRepo != nil {
+				cust, err := s.customerRepo.GetCustomerByID(ctx, tenantID, rID)
+				if err == nil && cust != nil {
+					if strings.TrimSpace(req.ReceiverName) == "" {
+						req.ReceiverName = cust.Name
+					}
+					if strings.TrimSpace(req.ReceiverPhone) == "" {
+						req.ReceiverPhone = cust.Phone
+					}
+					if strings.TrimSpace(req.ReceiverAddress) == "" {
+						addr := cust.AddressLine1
+						if cust.AddressLine2 != nil && *cust.AddressLine2 != "" {
+							addr += ", " + *cust.AddressLine2
+						}
+						addr += ", " + cust.City + ", " + cust.State + " " + cust.PostalCode
+						req.ReceiverAddress = addr
+					}
+					if req.ReceiverEmail == nil && cust.Email != nil {
+						req.ReceiverEmail = cust.Email
+					}
+				}
+			}
+		}
+	}
+
 	if strings.TrimSpace(req.DimensionsCM) == "" {
 		req.DimensionsCM = "30x20x15"
 	}
@@ -89,13 +154,22 @@ func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid
 		createdBy = &actorID
 	}
 
+	price := 0.0
+	if req.Price != nil && *req.Price >= 0 {
+		price = *req.Price
+	} else {
+		price = CalculateEstimatedPrice(req.ServiceType, req.WeightKG, declaredVal)
+	}
+
 	parcel := &Parcel{
 		TenantID:            tenantID,
 		TrackingNumber:      trackingNum,
+		SenderCustomerID:    senderCustID,
 		SenderName:          strings.TrimSpace(req.SenderName),
 		SenderPhone:         strings.TrimSpace(req.SenderPhone),
 		SenderEmail:         req.SenderEmail,
 		SenderAddress:       strings.TrimSpace(req.SenderAddress),
+		ReceiverCustomerID:  receiverCustID,
 		ReceiverName:        strings.TrimSpace(req.ReceiverName),
 		ReceiverPhone:       strings.TrimSpace(req.ReceiverPhone),
 		ReceiverEmail:       req.ReceiverEmail,
@@ -107,6 +181,7 @@ func (s *parcelService) CreateParcel(ctx context.Context, tenantID, actorID uuid
 		DimensionsCM:        strings.TrimSpace(req.DimensionsCM),
 		ServiceType:         strings.ToUpper(strings.TrimSpace(req.ServiceType)),
 		DeclaredValue:       declaredVal,
+		Price:               price,
 		Status:              StatusCreated,
 		SpecialInstructions: req.SpecialInstructions,
 		CreatedBy:           createdBy,

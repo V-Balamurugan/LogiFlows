@@ -10,6 +10,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/auth"
 	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
+	"github.com/logiflows/logiflows/backend/internal/customers"
 	"github.com/logiflows/logiflows/backend/internal/deliveries"
 	"github.com/logiflows/logiflows/backend/internal/employees"
 	"github.com/logiflows/logiflows/backend/internal/health"
@@ -35,6 +36,7 @@ type RouterParams struct {
 	EmployeeHandler  *employees.Handler
 	VehicleHandler   *vehicles.Handler
 	ParcelHandler    *parcels.Handler
+	CustomerHandler  *customers.Handler
 	DeliveryHandler  *deliveries.Handler
 	TransferHandler  *transfers.Handler
 	AuthMiddleware   gin.HandlerFunc
@@ -179,6 +181,22 @@ func SetupRouter(params RouterParams) *gin.Engine {
 
 									// Fleet Assignments Listing
 									tenantScoped.GET("/assignments", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer), params.VehicleHandler.ListAssignments)
+								}
+
+								// Customer Management Operations
+								if params.CustomerHandler != nil {
+									custRoutes := tenantScoped.Group("/customers")
+									{
+										custRoutes.POST("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleEmployee), params.CustomerHandler.Create)
+										custRoutes.GET("", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.CustomerHandler.List)
+										custRoutes.GET("/:customer_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.CustomerHandler.Get)
+										custRoutes.PUT("/:customer_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.CustomerHandler.Update)
+										custRoutes.PATCH("/:customer_id", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator), params.CustomerHandler.Update)
+										custRoutes.DELETE("/:customer_id", middleware.RequireRole(memberships.RoleTenantAdmin), params.CustomerHandler.Delete)
+										if params.ParcelHandler != nil {
+											custRoutes.GET("/:customer_id/parcels", middleware.RequireRole(memberships.RoleTenantAdmin, memberships.RoleTenantOperator, memberships.RoleViewer, memberships.RoleEmployee), params.ParcelHandler.GetByCustomer)
+										}
+									}
 								}
 
 								// Parcel Operations

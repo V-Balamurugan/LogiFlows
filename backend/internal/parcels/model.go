@@ -170,6 +170,9 @@ type Parcel struct {
 	SpecialInstructions *string    `json:"special_instructions,omitempty" db:"special_instructions"`
 	QRCodePayload       *string    `json:"qr_code_payload,omitempty" db:"qr_code_payload"`
 	CreatedBy           *uuid.UUID `json:"created_by,omitempty" db:"created_by"`
+	SenderCustomerID    *uuid.UUID `json:"sender_customer_id,omitempty" db:"sender_customer_id"`
+	ReceiverCustomerID  *uuid.UUID `json:"receiver_customer_id,omitempty" db:"receiver_customer_id"`
+	Price               float64    `json:"price" db:"price"`
 	CreatedAt           time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt           *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
@@ -219,10 +222,12 @@ type ParcelCustodyEvent struct {
 // CreateParcelRequest payload.
 type CreateParcelRequest struct {
 	TrackingNumber      string   `json:"tracking_number,omitempty"`
+	SenderCustomerID    *string  `json:"sender_customer_id,omitempty"`
 	SenderName          string   `json:"sender_name"`
 	SenderPhone         string   `json:"sender_phone"`
 	SenderEmail         *string  `json:"sender_email,omitempty"`
 	SenderAddress       string   `json:"sender_address"`
+	ReceiverCustomerID  *string  `json:"receiver_customer_id,omitempty"`
 	ReceiverName        string   `json:"receiver_name"`
 	ReceiverPhone       string   `json:"receiver_phone"`
 	ReceiverEmail       *string  `json:"receiver_email,omitempty"`
@@ -233,7 +238,35 @@ type CreateParcelRequest struct {
 	DimensionsCM        string   `json:"dimensions_cm"`
 	ServiceType         string   `json:"service_type"`
 	DeclaredValue       *float64 `json:"declared_value,omitempty"`
+	Price               *float64 `json:"price,omitempty"`
 	SpecialInstructions *string  `json:"special_instructions,omitempty"`
+}
+
+// CalculateEstimatedPrice calculates the default price for a parcel.
+func CalculateEstimatedPrice(serviceType string, weightKG float64, declaredValue float64) float64 {
+	baseRate := 50.0
+	switch strings.ToUpper(strings.TrimSpace(serviceType)) {
+	case ServiceTypeExpress:
+		baseRate = 120.0
+	case ServiceTypeOvernight:
+		baseRate = 200.0
+	case ServiceTypeSameDay:
+		baseRate = 350.0
+	default:
+		baseRate = 50.0
+	}
+
+	weightCost := weightKG * 20.0
+	if weightCost < 0 {
+		weightCost = 0
+	}
+
+	insurance := 0.0
+	if declaredValue > 1000.0 {
+		insurance = (declaredValue - 1000.0) * 0.005
+	}
+
+	return baseRate + weightCost + insurance
 }
 
 // UpdateParcelRequest payload.
@@ -300,6 +333,7 @@ type PublicTrackingResponse struct {
 
 // ParcelFilter options for listing.
 type ParcelFilter struct {
+	CustomerID      *uuid.UUID
 	Status          *string
 	OriginBranchID  *uuid.UUID
 	DestBranchID    *uuid.UUID

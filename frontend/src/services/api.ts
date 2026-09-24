@@ -22,6 +22,13 @@ import type {
   PublicTrackingResponse,
   ScanParcelResponse,
 } from '../types/parcels';
+import type {
+  Customer,
+  CreateCustomerPayload,
+  UpdateCustomerPayload,
+  CustomerFilter,
+  CustomerListResponse,
+} from '../types/customers';
 
 const API_BASE = 'http://localhost:8080/api/v1';
 const TOKEN_KEY = 'logiflows_access_token';
@@ -354,9 +361,10 @@ export const api = {
   },
 
   // --- Phase 4: Parcels ---
-  listParcels: (tenantId: string, filter: { status?: string; origin_branch_id?: string; destination_branch_id?: string; search?: string; page?: number; limit?: number } = {}) => {
+  listParcels: (tenantId: string, filter: { status?: string; customer_id?: string; origin_branch_id?: string; destination_branch_id?: string; search?: string; page?: number; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filter.status) params.set('status', filter.status);
+    if (filter.customer_id) params.set('customer_id', filter.customer_id);
     if (filter.origin_branch_id) params.set('origin_branch_id', filter.origin_branch_id);
     if (filter.destination_branch_id) params.set('destination_branch_id', filter.destination_branch_id);
     if (filter.search) params.set('search', filter.search);
@@ -480,6 +488,48 @@ export const api = {
   // --- Phase 4: Customer Tracking ---
   getPublicTracking: (trackingNumber: string) =>
     request<PublicTrackingResponse>(`/tracking/${encodeURIComponent(trackingNumber)}`, { method: 'GET' }),
+
+  // --- Phase 4: Customer Management & CRM ---
+  listCustomers: (tenantId: string, filter: CustomerFilter = {}) => {
+    const params = new URLSearchParams();
+    if (filter.search) params.set('search', filter.search);
+    if (filter.customer_type) params.set('customer_type', filter.customer_type);
+    if (filter.status) params.set('status', filter.status);
+    if (filter.page) params.set('page', String(filter.page));
+    if (filter.limit) params.set('limit', String(filter.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<CustomerListResponse>(`/tenants/${tenantId}/customers${qs}`, { method: 'GET' });
+  },
+
+  getCustomer: (tenantId: string, customerId: string) =>
+    request<Customer>(`/tenants/${tenantId}/customers/${customerId}`, { method: 'GET' }),
+
+  createCustomer: (tenantId: string, payload: CreateCustomerPayload) =>
+    request<Customer>(`/tenants/${tenantId}/customers`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateCustomer: (tenantId: string, customerId: string, payload: UpdateCustomerPayload) =>
+    request<Customer>(`/tenants/${tenantId}/customers/${customerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteCustomer: (tenantId: string, customerId: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}/customers/${customerId}`, {
+      method: 'DELETE',
+    }),
+
+  getCustomerParcels: (tenantId: string, customerId: string, params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request<{ parcels: Parcel[]; total: number; page: number; limit: number }>(`/tenants/${tenantId}/customers/${customerId}/parcels${qs}`, {
+      method: 'GET',
+    });
+  },
 };
 
 

@@ -17,6 +17,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/auth"
 	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
+	"github.com/logiflows/logiflows/backend/internal/customers"
 	"github.com/logiflows/logiflows/backend/internal/database"
 	"github.com/logiflows/logiflows/backend/internal/deliveries"
 	"github.com/logiflows/logiflows/backend/internal/employees"
@@ -79,8 +80,12 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
 	vehicleHandler := vehicles.NewHandler(vehicleService)
 
+	customerRepo := customers.NewRepository(db.Pool())
+	customerService := customers.NewService(customerRepo)
+	customerHandler := customers.NewHandler(customerService)
+
 	parcelRepo := parcels.NewRepository(db.Pool())
-	parcelService := parcels.NewService(parcelRepo, branchRepo)
+	parcelService := parcels.NewService(parcelRepo, branchRepo, customerRepo)
 	parcelHandler := parcels.NewHandler(parcelService)
 
 	deliveryRepo := deliveries.NewRepository(db.Pool())
@@ -107,6 +112,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *auth.TokenService) {
 		BranchHandler:    branchHandler,
 		EmployeeHandler:  employeeHandler,
 		VehicleHandler:   vehicleHandler,
+		CustomerHandler:  customerHandler,
 		ParcelHandler:    parcelHandler,
 		DeliveryHandler:  deliveryHandler,
 		TransferHandler:  transferHandler,

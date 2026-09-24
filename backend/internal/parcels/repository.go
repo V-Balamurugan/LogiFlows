@@ -18,6 +18,7 @@ type Repository interface {
 	GetParcelByID(ctx context.Context, tenantID, parcelID uuid.UUID) (*Parcel, error)
 	GetParcelByTrackingNumber(ctx context.Context, trackingNumber string) (*Parcel, error)
 	ListParcels(ctx context.Context, tenantID uuid.UUID, filter ParcelFilter) ([]Parcel, int, error)
+	ListParcelsByCustomerID(ctx context.Context, tenantID, customerID uuid.UUID, limit, offset int) ([]Parcel, int, error)
 	UpdateParcel(ctx context.Context, p *Parcel) error
 	UpdateParcelStatus(ctx context.Context, tenantID, parcelID uuid.UUID, toStatus string, branchID *uuid.UUID, actorID *uuid.UUID, actorRole string, notes string) error
 	GetParcelTimeline(ctx context.Context, tenantID, parcelID uuid.UUID) ([]ParcelStatusHistory, error)
@@ -73,13 +74,15 @@ func (r *pgRepository) CreateParcel(ctx context.Context, p *Parcel) error {
 			receiver_name, receiver_phone, receiver_email, receiver_address,
 			origin_branch_id, destination_branch_id, current_branch_id,
 			weight_kg, dimensions_cm, service_type, declared_value,
-			status, special_instructions, created_by
+			status, special_instructions, created_by,
+			sender_customer_id, receiver_customer_id, price
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10,
 			$11, $12, $13,
 			$14, $15, $16, $17,
-			$18, $19, $20
+			$18, $19, $20,
+			$21, $22, $23
 		)
 		RETURNING id, created_at, updated_at;
 	`
@@ -111,6 +114,9 @@ func (r *pgRepository) CreateParcel(ctx context.Context, p *Parcel) error {
 		p.Status,
 		p.SpecialInstructions,
 		p.CreatedBy,
+		p.SenderCustomerID,
+		p.ReceiverCustomerID,
+		p.Price,
 	).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 
 	if err != nil {
@@ -153,6 +159,7 @@ func (r *pgRepository) GetParcelByID(ctx context.Context, tenantID, parcelID uui
 			p.origin_branch_id, p.destination_branch_id, p.current_branch_id,
 			p.weight_kg, p.dimensions_cm, p.service_type, p.declared_value,
 			p.status, p.special_instructions, p.qr_code_payload, p.created_by,
+			p.sender_customer_id, p.receiver_customer_id, p.price,
 			p.created_at, p.updated_at, p.deleted_at,
 			ob.name AS origin_branch_name, ob.branch_code AS origin_branch_code,
 			db.name AS destination_branch_name, db.branch_code AS destination_branch_code,
@@ -171,6 +178,7 @@ func (r *pgRepository) GetParcelByID(ctx context.Context, tenantID, parcelID uui
 		&p.OriginBranchID, &p.DestinationBranchID, &p.CurrentBranchID,
 		&p.WeightKG, &p.DimensionsCM, &p.ServiceType, &p.DeclaredValue,
 		&p.Status, &p.SpecialInstructions, &p.QRCodePayload, &p.CreatedBy,
+		&p.SenderCustomerID, &p.ReceiverCustomerID, &p.Price,
 		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		&p.OriginBranchName, &p.OriginBranchCode,
 		&p.DestinationBranchName, &p.DestinationBranchCode,
@@ -195,6 +203,7 @@ func (r *pgRepository) GetParcelByTrackingNumber(ctx context.Context, trackingNu
 			p.origin_branch_id, p.destination_branch_id, p.current_branch_id,
 			p.weight_kg, p.dimensions_cm, p.service_type, p.declared_value,
 			p.status, p.special_instructions, p.qr_code_payload, p.created_by,
+			p.sender_customer_id, p.receiver_customer_id, p.price,
 			p.created_at, p.updated_at, p.deleted_at,
 			ob.name AS origin_branch_name, ob.branch_code AS origin_branch_code,
 			db.name AS destination_branch_name, db.branch_code AS destination_branch_code,
@@ -213,6 +222,7 @@ func (r *pgRepository) GetParcelByTrackingNumber(ctx context.Context, trackingNu
 		&p.OriginBranchID, &p.DestinationBranchID, &p.CurrentBranchID,
 		&p.WeightKG, &p.DimensionsCM, &p.ServiceType, &p.DeclaredValue,
 		&p.Status, &p.SpecialInstructions, &p.QRCodePayload, &p.CreatedBy,
+		&p.SenderCustomerID, &p.ReceiverCustomerID, &p.Price,
 		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		&p.OriginBranchName, &p.OriginBranchCode,
 		&p.DestinationBranchName, &p.DestinationBranchCode,
@@ -241,6 +251,11 @@ func (r *pgRepository) ListParcels(ctx context.Context, tenantID uuid.UUID, filt
 	args := []any{tenantID}
 	argIdx := 2
 
+	if filter.CustomerID != nil {
+		baseQuery += fmt.Sprintf(" AND (p.sender_customer_id = $%d OR p.receiver_customer_id = $%d)", argIdx, argIdx)
+		args = append(args, *filter.CustomerID)
+		argIdx++
+	}
 	if filter.Status != nil && *filter.Status != "" {
 		baseQuery += fmt.Sprintf(" AND p.status = $%d", argIdx)
 		args = append(args, *filter.Status)
@@ -300,6 +315,7 @@ func (r *pgRepository) ListParcels(ctx context.Context, tenantID uuid.UUID, filt
 			p.origin_branch_id, p.destination_branch_id, p.current_branch_id,
 			p.weight_kg, p.dimensions_cm, p.service_type, p.declared_value,
 			p.status, p.special_instructions, p.qr_code_payload, p.created_by,
+			p.sender_customer_id, p.receiver_customer_id, p.price,
 			p.created_at, p.updated_at, p.deleted_at,
 			ob.name AS origin_branch_name, ob.branch_code AS origin_branch_code,
 			db.name AS destination_branch_name, db.branch_code AS destination_branch_code,
@@ -323,6 +339,7 @@ func (r *pgRepository) ListParcels(ctx context.Context, tenantID uuid.UUID, filt
 			&p.OriginBranchID, &p.DestinationBranchID, &p.CurrentBranchID,
 			&p.WeightKG, &p.DimensionsCM, &p.ServiceType, &p.DeclaredValue,
 			&p.Status, &p.SpecialInstructions, &p.QRCodePayload, &p.CreatedBy,
+			&p.SenderCustomerID, &p.ReceiverCustomerID, &p.Price,
 			&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 			&p.OriginBranchName, &p.OriginBranchCode,
 			&p.DestinationBranchName, &p.DestinationBranchCode,
@@ -335,6 +352,14 @@ func (r *pgRepository) ListParcels(ctx context.Context, tenantID uuid.UUID, filt
 	}
 
 	return parcels, total, nil
+}
+
+func (r *pgRepository) ListParcelsByCustomerID(ctx context.Context, tenantID, customerID uuid.UUID, limit, offset int) ([]Parcel, int, error) {
+	return r.ListParcels(ctx, tenantID, ParcelFilter{
+		CustomerID: &customerID,
+		Limit:      limit,
+		Offset:     offset,
+	})
 }
 
 func (r *pgRepository) UpdateParcel(ctx context.Context, p *Parcel) error {

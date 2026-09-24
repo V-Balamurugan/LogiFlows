@@ -209,6 +209,92 @@ export const ParcelLabelModal: React.FC<ParcelLabelModalProps> = ({
     link.click();
   };
 
+  // Download QR code with Destination and Parcel ID
+  const handleDownloadQrWithDestinationAndId = async () => {
+    if (!qrDataUrl || !parcel) return;
+
+    const canvas = document.createElement('canvas');
+    const width = 560;
+    const height = 680;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+
+    // Border
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(16, 16, width - 32, height - 32);
+
+    // Top Header Banner
+    ctx.fillStyle = '#0F172A';
+    ctx.fillRect(16, 16, width - 32, 60);
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('LOGIFLOWS PARCEL ROUTING QR', width / 2, 54);
+
+    // Destination Box
+    ctx.fillStyle = '#FEF2F2';
+    ctx.fillRect(26, 88, width - 52, 75);
+    ctx.strokeStyle = '#FCA5A5';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(26, 88, width - 52, 75);
+
+    ctx.fillStyle = '#DC2626';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('DESTINATION HUB & ZONE:', 40, 110);
+
+    ctx.fillStyle = '#0F172A';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(`${destCity.toUpperCase()} — ${destName.toUpperCase()}`, 40, 140);
+
+    // Draw QR Code
+    const qrImg = new Image();
+    qrImg.crossOrigin = 'anonymous';
+    qrImg.src = qrDataUrl;
+    await new Promise((resolve) => {
+      qrImg.onload = resolve;
+    });
+    const qrSize = 320;
+    const qrX = (width - qrSize) / 2;
+    const qrY = 175;
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    // Tracking Number
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(parcel.tracking_number, width / 2, 530);
+
+    // Parcel ID
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#475569';
+    ctx.fillText(`Parcel ID: ${parcel.id}`, width / 2, 560);
+
+    // Receiver and Service
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#64748B';
+    ctx.fillText(`Deliver to: ${parcel.receiver_name} | Service: ${parcel.service_type || 'STANDARD'}`, width / 2, 585);
+
+    // Footer
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#94A3B8';
+    ctx.fillText('Scan for Origin Hub Intake, Custody Handoff & Dispatch Confirmation', width / 2, 630);
+
+    // Trigger Download
+    const link = document.createElement('a');
+    link.download = `QR-Destination-${parcel.tracking_number}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
   // Download QR code image only
   const handleDownloadQrOnly = () => {
     if (!qrDataUrl) return;
@@ -606,25 +692,47 @@ export const ParcelLabelModal: React.FC<ParcelLabelModalProps> = ({
             gap: '0.75rem',
           }}
         >
-          <button
-            onClick={handleDownloadQrOnly}
-            style={{
-              padding: '0.6rem 1rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border-subtle)',
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-            }}
-          >
-            <Download size={16} />
-            Download QR Only (PNG)
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleDownloadQrOnly}
+              style={{
+                padding: '0.6rem 0.9rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border-subtle)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+              }}
+            >
+              <Download size={16} />
+              Raw QR (PNG)
+            </button>
+
+            <button
+              onClick={handleDownloadQrWithDestinationAndId}
+              style={{
+                padding: '0.6rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(6, 182, 212, 0.4)',
+                background: 'rgba(6, 182, 212, 0.1)',
+                color: 'var(--accent-cyan)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+              }}
+            >
+              <QrIcon size={16} />
+              QR with Destination & ID (PNG)
+            </button>
+          </div>
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button

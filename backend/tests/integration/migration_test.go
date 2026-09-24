@@ -45,6 +45,7 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 		"branches", "employees", "vehicles", "vehicle_assignments", "tenant_employee_sequences",
 		"tenant_parcel_sequences", "parcels", "parcel_status_history", "parcel_custody_events",
 		"branch_transfers", "branch_transfer_parcels", "delivery_tasks", "delivery_attempts", "delivery_proofs",
+		"tenant_customer_sequences", "customers",
 	}
 	for _, table := range expectedTables {
 		var exists bool
@@ -98,6 +99,19 @@ func TestMigrations_RunUp_Success(t *testing.T) {
 	if !parcelTrackingColExists {
 		t.Errorf("expected column tracking_number to exist on parcels table")
 	}
+
+	// 6. Verify Phase 4 customer management columns exist
+	var parcelCustomerColExists bool
+	parcelCustColQuery := `SELECT EXISTS (
+		SELECT FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'parcels' AND column_name = 'sender_customer_id'
+	)`
+	if err := conn.QueryRow(ctx, parcelCustColQuery).Scan(&parcelCustomerColExists); err != nil {
+		t.Fatalf("failed to query column existence for parcels.sender_customer_id: %v", err)
+	}
+	if !parcelCustomerColExists {
+		t.Errorf("expected column sender_customer_id to exist on parcels table")
+	}
 }
 
 func TestMigrations_RollbackAndReapply(t *testing.T) {
@@ -121,7 +135,7 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 		t.Fatalf("failed to ensure migrations are up: %v", err)
 	}
 
-	// 2. Rollback latest migration (00008_create_parcel_delivery_lifecycle)
+	// 2. Rollback latest migration (00009_create_customer_management)
 	defer func() {
 		_ = migrations.RunUp(context.Background(), cfg.Database.DSN(), log)
 	}()
@@ -136,29 +150,29 @@ func TestMigrations_RollbackAndReapply(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Verify tenant_parcel_sequences table is dropped after rollback of migration 00008
+	// Verify tenant_customer_sequences table is dropped after rollback of migration 00009
 	var seqTableExists bool
 	query := `SELECT EXISTS (
 		SELECT FROM information_schema.tables 
-		WHERE table_schema = 'public' AND table_name = 'tenant_parcel_sequences'
+		WHERE table_schema = 'public' AND table_name = 'tenant_customer_sequences'
 	)`
 	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
-		t.Fatalf("failed to check tenant_parcel_sequences existence: %v", err)
+		t.Fatalf("failed to check tenant_customer_sequences existence: %v", err)
 	}
 	if seqTableExists {
-		t.Errorf("expected tenant_parcel_sequences table to be dropped after rollback")
+		t.Errorf("expected tenant_customer_sequences table to be dropped after rollback")
 	}
 
-	// 3. Re-apply migration 00008
+	// 3. Re-apply migration 00009
 	if err := migrations.RunUp(ctx, cfg.Database.DSN(), log); err != nil {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Verify tenant_parcel_sequences table is recreated
+	// Verify tenant_customer_sequences table is recreated
 	if err := conn.QueryRow(ctx, query).Scan(&seqTableExists); err != nil {
-		t.Fatalf("failed to check tenant_parcel_sequences re-creation: %v", err)
+		t.Fatalf("failed to check tenant_customer_sequences re-creation: %v", err)
 	}
 	if !seqTableExists {
-		t.Errorf("expected tenant_parcel_sequences table to exist after re-applying migration")
+		t.Errorf("expected tenant_customer_sequences table to exist after re-applying migration")
 	}
 }

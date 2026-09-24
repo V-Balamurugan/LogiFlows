@@ -24,6 +24,7 @@ import type {
   ParcelStatusHistory 
 } from '../../types/parcels';
 import type { Branch } from '../../types/resources';
+import type { Customer } from '../../types/customers';
 import { ParcelLabelModal } from './ParcelLabelModal';
 
 interface ParcelListProps {
@@ -95,6 +96,7 @@ const SERVICE_BADGES: Record<ServiceType, { label: string; color: string }> = {
 export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [customerList, setCustomerList] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -131,6 +133,8 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
 
   // New parcel form state
   const [formData, setFormData] = useState<CreateParcelPayload>({
+    sender_customer_id: '',
+    receiver_customer_id: '',
     sender_name: '',
     sender_phone: '',
     sender_email: '',
@@ -152,20 +156,41 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
 
   const isOperator = userRole === 'TENANT_ADMIN' || userRole === 'TENANT_OPERATOR' || userRole === 'PLATFORM_ADMIN';
 
+  const getEstimatedPrice = (serviceType: ServiceType, weightKg: number, declaredValue: number = 0) => {
+    let base = 50;
+    if (serviceType === 'EXPRESS') base = 120;
+    else if (serviceType === 'OVERNIGHT') base = 200;
+    else if (serviceType === 'SAME_DAY') base = 350;
+
+    const weightFee = Math.max(0, weightKg) * 20;
+    let insuranceFee = 0;
+    if (declaredValue > 1000) {
+      insuranceFee = (declaredValue - 1000) * 0.005;
+    }
+    return {
+      base,
+      weightFee,
+      insuranceFee,
+      total: Math.round((base + weightFee + insuranceFee) * 100) / 100,
+    };
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [parcelRes, branchRes] = await Promise.all([
+      const [parcelRes, branchRes, customerRes] = await Promise.all([
         api.listParcels(tenantId, {
           search: searchTerm || undefined,
           status: statusFilter || undefined,
           origin_branch_id: branchFilter || undefined,
         }),
         api.listBranches(tenantId),
+        api.listCustomers(tenantId, { limit: 100 }).catch(() => ({ customers: [], total: 0, page: 1, limit: 100 })),
       ]);
       setParcels(parcelRes.parcels || []);
       setBranches(branchRes.branches || []);
+      setCustomerList(customerRes.customers || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load parcels catalog');
     } finally {
@@ -524,6 +549,11 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         {p.weight_kg} kg • {p.dimensions_cm}
                       </div>
+                      {p.price !== undefined && p.price !== null && (
+                        <div style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 600, marginTop: '2px' }}>
+                          ₹{p.price.toFixed(2)}
+                        </div>
+                      )}
                     </td>
 
                     <td style={{ padding: '1rem' }}>
@@ -736,7 +766,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
               </div>
 
               {/* Service & Specs */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
                 <div>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Service Level</label>
                   <select
@@ -765,7 +795,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Dimensions (LxWxH cm)</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Dimensions (cm)</label>
                   <input
                     type="text"
                     placeholder="30x20x15"
@@ -775,11 +805,89 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   />
                 </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Declared Value (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    placeholder="0"
+                    value={formData.declared_value || ''}
+                    onChange={(e) => setFormData({ ...formData, declared_value: parseFloat(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  />
+                </div>
               </div>
+
+              {/* Dynamic Price Estimate Card */}
+              {(() => {
+                const est = getEstimatedPrice(formData.service_type, formData.weight_kg, formData.declared_value);
+                return (
+                  <div style={{
+                    background: 'rgba(6, 182, 212, 0.08)',
+                    border: '1px solid rgba(6, 182, 212, 0.25)',
+                    borderRadius: '8px',
+                    padding: '0.85rem 1.1rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Dynamic Tariff & Insurance Estimate:</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#34d399' }}>₹{est.total.toFixed(2)}</div>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#cbd5e1', textAlign: 'right' }}>
+                      Base: ₹{est.base} | Weight ({formData.weight_kg}kg): ₹{est.weightFee.toFixed(2)} | Insurance: ₹{est.insuranceFee.toFixed(2)}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Sender Details */}
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '0.75rem' }}>Sender Information</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', margin: 0 }}>Sender Information</h4>
+                  {customerList.length > 0 && (
+                    <select
+                      value={formData.sender_customer_id || ''}
+                      onChange={(e) => {
+                        const custId = e.target.value;
+                        const cust = customerList.find((c) => c.id === custId);
+                        if (cust) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            sender_customer_id: cust.id,
+                            sender_name: cust.name,
+                            sender_phone: cust.phone,
+                            sender_email: cust.email || '',
+                            sender_address: cust.billing_address,
+                          }));
+                        } else {
+                          setFormData((prev) => ({ ...prev, sender_customer_id: '' }));
+                        }
+                      }}
+                      style={{
+                        padding: '0.35rem 0.65rem',
+                        borderRadius: '6px',
+                        background: '#0f172a',
+                        border: '1px solid #334155',
+                        color: 'var(--accent-cyan)',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">⚡ Auto-fill from Customer CRM...</option>
+                      {customerList.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.customer_code} — {c.name} {c.company_name ? `(${c.company_name})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                   <input
                     type="text"
@@ -810,7 +918,46 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
 
               {/* Receiver Details */}
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '0.75rem' }}>Recipient Information</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', margin: 0 }}>Recipient Information</h4>
+                  {customerList.length > 0 && (
+                    <select
+                      value={formData.receiver_customer_id || ''}
+                      onChange={(e) => {
+                        const custId = e.target.value;
+                        const cust = customerList.find((c) => c.id === custId);
+                        if (cust) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            receiver_customer_id: cust.id,
+                            receiver_name: cust.name,
+                            receiver_phone: cust.phone,
+                            receiver_email: cust.email || '',
+                            receiver_address: cust.shipping_address || cust.billing_address,
+                          }));
+                        } else {
+                          setFormData((prev) => ({ ...prev, receiver_customer_id: '' }));
+                        }
+                      }}
+                      style={{
+                        padding: '0.35rem 0.65rem',
+                        borderRadius: '6px',
+                        background: '#0f172a',
+                        border: '1px solid #334155',
+                        color: 'var(--accent-cyan)',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">⚡ Auto-fill from Customer CRM...</option>
+                      {customerList.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.customer_code} — {c.name} {c.company_name ? `(${c.company_name})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                   <input
                     type="text"

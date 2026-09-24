@@ -12,6 +12,7 @@ import (
 	"github.com/logiflows/logiflows/backend/internal/auth"
 	"github.com/logiflows/logiflows/backend/internal/branches"
 	"github.com/logiflows/logiflows/backend/internal/config"
+	"github.com/logiflows/logiflows/backend/internal/customers"
 	"github.com/logiflows/logiflows/backend/internal/database"
 	"github.com/logiflows/logiflows/backend/internal/deliveries"
 	"github.com/logiflows/logiflows/backend/internal/employees"
@@ -121,9 +122,13 @@ func main() {
 	vehicleService := vehicles.NewService(vehicleRepo, branchRepo, employeeRepo, auditRepo)
 	vehicleHandler := vehicles.NewHandler(vehicleService)
 
-	// Phase 4: Parcel, Delivery, and Transfer Handlers
+	// Phase 4: Customer, Parcel, Delivery, and Transfer Handlers
+	customerRepo := customers.NewRepository(db.Pool())
+	customerService := customers.NewService(customerRepo)
+	customerHandler := customers.NewHandler(customerService)
+
 	parcelRepo := parcels.NewRepository(db.Pool())
-	parcelService := parcels.NewService(parcelRepo, branchRepo)
+	parcelService := parcels.NewService(parcelRepo, branchRepo, customerRepo)
 	parcelHandler := parcels.NewHandler(parcelService)
 
 	deliveryRepo := deliveries.NewRepository(db.Pool())
@@ -146,6 +151,7 @@ func main() {
 		BranchHandler:    branchHandler,
 		EmployeeHandler:  employeeHandler,
 		VehicleHandler:   vehicleHandler,
+		CustomerHandler:  customerHandler,
 		ParcelHandler:    parcelHandler,
 		DeliveryHandler:  deliveryHandler,
 		TransferHandler:  transferHandler,

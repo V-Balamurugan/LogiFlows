@@ -21,6 +21,8 @@ export interface Parcel {
   id: string;
   tenant_id: string;
   tracking_number: string;
+  sender_customer_id?: string;
+  receiver_customer_id?: string;
   sender_name: string;
   sender_phone: string;
   sender_email?: string;
@@ -36,6 +38,7 @@ export interface Parcel {
   dimensions_cm: string;
   service_type: ServiceType;
   declared_value: number;
+  price?: number;
   status: ParcelStatus;
   special_instructions?: string;
   qr_code_payload?: string;
@@ -85,6 +88,8 @@ export interface ParcelCustodyEvent {
 
 export interface CreateParcelPayload {
   tracking_number?: string;
+  sender_customer_id?: string;
+  receiver_customer_id?: string;
   sender_name: string;
   sender_phone: string;
   sender_email?: string;
@@ -103,6 +108,8 @@ export interface CreateParcelPayload {
 }
 
 export interface UpdateParcelPayload {
+  sender_customer_id?: string;
+  receiver_customer_id?: string;
   sender_name?: string;
   sender_phone?: string;
   sender_email?: string;
@@ -120,6 +127,7 @@ export interface UpdateParcelPayload {
 
 export interface ParcelFilter {
   status?: string;
+  customer_id?: string;
   origin_branch_id?: string;
   destination_branch_id?: string;
   current_branch_id?: string;
