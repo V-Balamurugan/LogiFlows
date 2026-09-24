@@ -13,9 +13,12 @@ import {
   X,
   MapPin,
   Scan,
-  Printer
+  Printer,
+  Building2,
+  Loader2
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import type { 
   Parcel, 
   ParcelStatus, 
@@ -94,12 +97,31 @@ const SERVICE_BADGES: Record<ServiceType, { label: string; color: string }> = {
 };
 
 export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) => {
+  const { tenants } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [customerList, setCustomerList] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Multi-Company/Tenant Booking State
+  const [bookingTenantId, setBookingTenantId] = useState<string>(tenantId);
+  const [bookingBranches, setBookingBranches] = useState<Branch[]>(branches);
+  const [bookingCustomers, setBookingCustomers] = useState<Customer[]>(customerList);
+  const [loadingTenantData, setLoadingTenantData] = useState<boolean>(false);
+
+  useEffect(() => {
+    setBookingTenantId(tenantId);
+  }, [tenantId]);
+
+  useEffect(() => {
+    setBookingBranches(branches);
+  }, [branches]);
+
+  useEffect(() => {
+    setBookingCustomers(customerList);
+  }, [customerList]);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -253,8 +275,37 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
     }
   };
 
+  const handleBookingTenantChange = async (newTenantId: string) => {
+    setBookingTenantId(newTenantId);
+    setFormData((prev) => ({
+      ...prev,
+      origin_branch_id: '',
+      destination_branch_id: '',
+      sender_customer_id: '',
+      receiver_customer_id: '',
+    }));
+    setLoadingTenantData(true);
+    setCreateError(null);
+    try {
+      const [bRes, cRes] = await Promise.all([
+        api.listBranches(newTenantId),
+        api.listCustomers(newTenantId, { limit: 100 }).catch(() => ({ customers: [], total: 0, page: 1, limit: 100 })),
+      ]);
+      setBookingBranches(bRes.branches || []);
+      setBookingCustomers(cRes.customers || []);
+    } catch (err: any) {
+      setCreateError(`Failed to load branches and customers for selected company: ${err.message}`);
+    } finally {
+      setLoadingTenantData(false);
+    }
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.origin_branch_id || !formData.destination_branch_id) {
+      setCreateError('Please select both origin and destination hub branches');
+      return;
+    }
     if (formData.origin_branch_id === formData.destination_branch_id) {
       setCreateError('Origin and destination hub branches must be different');
       return;
@@ -267,13 +318,16 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
     try {
       setCreateLoading(true);
       setCreateError(null);
-      const created = await api.createParcel(tenantId, formData);
+      const created = await api.createParcel(bookingTenantId, formData);
       setShowCreateModal(false);
       setLabelParcel(created);
       setShowLabelModal(true);
-      setSuccessMsg(`Parcel ${created.tracking_number} registered! QR code & shipping label generated.`);
+      const selectedTenantName = tenants.find((t) => t.id === bookingTenantId)?.name || 'Company';
+      setSuccessMsg(`Parcel ${created.tracking_number} registered under ${selectedTenantName}! QR code & shipping label generated.`);
       setTimeout(() => setSuccessMsg(null), 5000);
-      loadData();
+      if (bookingTenantId === tenantId) {
+        loadData();
+      }
     } catch (err: any) {
       setCreateError(err.message || 'Failed to create parcel');
     } finally {
@@ -732,6 +786,50 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
             )}
 
             <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {/* Operating Company / Tenant Hub Network Selector */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '0.9rem',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+                    <Building2 size={16} />
+                    Operating Company & Tenant Hub Network *
+                  </label>
+                  {loadingTenantData && (
+                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Loader2 size={12} className="spin-slow" /> Loading network hubs...
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={bookingTenantId}
+                  onChange={(e) => handleBookingTenantChange(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '6px',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    color: '#f8fafc',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    outline: 'none',
+                  }}
+                >
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.slug}) — Role: {t.role}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px', display: 'block' }}>
+                  Select any company or tenant hub network you have authority over to dispatch parcels.
+                </span>
+              </div>
+
               {/* Routing Hubs */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
@@ -743,7 +841,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   >
                     <option value="">Select Origin Hub</option>
-                    {branches.map((b) => (
+                    {bookingBranches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
                     ))}
                   </select>
@@ -758,7 +856,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   >
                     <option value="">Select Destination Hub</option>
-                    {branches.map((b) => (
+                    {bookingBranches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
                     ))}
                   </select>
@@ -850,12 +948,12 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                   <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', margin: 0 }}>Sender Information</h4>
-                  {customerList.length > 0 && (
+                  {bookingCustomers.length > 0 && (
                     <select
                       value={formData.sender_customer_id || ''}
                       onChange={(e) => {
                         const custId = e.target.value;
-                        const cust = customerList.find((c) => c.id === custId);
+                        const cust = bookingCustomers.find((c) => c.id === custId);
                         if (cust) {
                           setFormData((prev) => ({
                             ...prev,
@@ -880,7 +978,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                       }}
                     >
                       <option value="">⚡ Auto-fill from Customer CRM...</option>
-                      {customerList.map((c) => (
+                      {bookingCustomers.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.customer_code} — {c.name} {c.company_name ? `(${c.company_name})` : ''}
                         </option>
@@ -920,12 +1018,12 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                   <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-cyan)', margin: 0 }}>Recipient Information</h4>
-                  {customerList.length > 0 && (
+                  {bookingCustomers.length > 0 && (
                     <select
                       value={formData.receiver_customer_id || ''}
                       onChange={(e) => {
                         const custId = e.target.value;
-                        const cust = customerList.find((c) => c.id === custId);
+                        const cust = bookingCustomers.find((c) => c.id === custId);
                         if (cust) {
                           setFormData((prev) => ({
                             ...prev,
@@ -950,7 +1048,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
                       }}
                     >
                       <option value="">⚡ Auto-fill from Customer CRM...</option>
-                      {customerList.map((c) => (
+                      {bookingCustomers.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.customer_code} — {c.name} {c.company_name ? `(${c.company_name})` : ''}
                         </option>
@@ -1459,7 +1557,7 @@ export const ParcelList: React.FC<ParcelListProps> = ({ tenantId, userRole }) =>
       {/* SHIPPING LABEL & QR GENERATOR / DOWNLOAD MODAL */}
       <ParcelLabelModal
         parcel={labelParcel}
-        branches={branches}
+        branches={bookingBranches.length > 0 ? bookingBranches : branches}
         isOpen={showLabelModal}
         onClose={() => setShowLabelModal(false)}
         onStatusUpdate={async (parcelId, status) => {
