@@ -992,6 +992,268 @@
           "404": { "description": "Vehicle not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
         }
       }
+    },
+    "/api/v1/tracking/{tracking_number}": {
+      "get": {
+        "tags": ["Tracking"],
+        "summary": "Public Customer Parcel Tracking",
+        "description": "Public, unauthenticated, sanitized parcel tracking for recipients and senders. Zero PII leaks.",
+        "produces": ["application/json"],
+        "parameters": [
+          { "in": "path", "name": "tracking_number", "required": true, "type": "string" }
+        ],
+        "responses": {
+          "200": { "description": "Tracking details", "schema": { "$ref": "#/definitions/PublicTrackingResponseEnvelope" } },
+          "404": { "description": "Tracking number not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/parcels": {
+      "post": {
+        "tags": ["Parcels"],
+        "summary": "Create Parcel Shipment",
+        "description": "Books a new parcel shipment and generates an immutable tracking number.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/CreateParcelRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Parcel created successfully", "schema": { "$ref": "#/definitions/ParcelResponseEnvelope" } },
+          "400": { "description": "Validation error", "schema": { "$ref": "#/definitions/ErrorEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Parcels"],
+        "summary": "List Parcels",
+        "description": "Lists parcels with optional filters by status, branch, or search.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "status", "type": "string" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "search", "type": "string" },
+          { "in": "query", "name": "limit", "type": "integer", "default": 50 },
+          { "in": "query", "name": "offset", "type": "integer", "default": 0 }
+        ],
+        "responses": {
+          "200": { "description": "Parcels retrieved", "schema": { "$ref": "#/definitions/ParcelListResponseEnvelope" } },
+          "403": { "description": "Forbidden", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/parcels/{id}": {
+      "get": {
+        "tags": ["Parcels"],
+        "summary": "Get Parcel Details and Audit History",
+        "description": "Retrieves comprehensive parcel details, chain-of-custody, and lifecycle event audit trail.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Parcel details retrieved", "schema": { "$ref": "#/definitions/ParcelResponseEnvelope" } },
+          "404": { "description": "Parcel not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/parcels/{id}/status": {
+      "patch": {
+        "tags": ["Parcels"],
+        "summary": "Transition Parcel Status (FSM)",
+        "description": "Transitions a parcel to a new state according to strict 15-state state machine rules.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/UpdateParcelStatusRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Status transitioned successfully", "schema": { "$ref": "#/definitions/ParcelResponseEnvelope" } },
+          "400": { "description": "Illegal status transition", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/parcels/scan": {
+      "post": {
+        "tags": ["Parcels"],
+        "summary": "Verify QR / Barcode Scan",
+        "description": "Verifies parcel QR payload or tracking barcode and logs custody scan event.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/VerifyScanRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Scan verified successfully", "schema": { "$ref": "#/definitions/ParcelResponseEnvelope" } },
+          "400": { "description": "Invalid or tampered barcode", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/deliveries": {
+      "post": {
+        "tags": ["Deliveries"],
+        "summary": "Create Delivery Task (Dispatch)",
+        "description": "Dispatches a parcel out for delivery to an authorized driver. Rejects duplicate active assignments with HTTP 409.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/CreateDeliveryTaskRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Delivery task assigned", "schema": { "$ref": "#/definitions/DeliveryTaskResponseEnvelope" } },
+          "409": { "description": "Conflict: Parcel already assigned to an active delivery task", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Deliveries"],
+        "summary": "List Delivery Tasks",
+        "description": "Lists delivery tasks filtered by status, driver, or branch.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "status", "type": "string" },
+          { "in": "query", "name": "driver_id", "type": "string", "format": "uuid" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Delivery tasks retrieved", "schema": { "$ref": "#/definitions/DeliveryTaskListResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/deliveries/{id}": {
+      "get": {
+        "tags": ["Deliveries"],
+        "summary": "Get Delivery Task Details",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Delivery task details", "schema": { "$ref": "#/definitions/DeliveryTaskResponseEnvelope" } },
+          "404": { "description": "Delivery task not found", "schema": { "$ref": "#/definitions/ErrorEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/deliveries/{id}/attempts": {
+      "post": {
+        "tags": ["Deliveries"],
+        "summary": "Record Delivery Attempt",
+        "description": "Records an attempt (FAILED or RESCHEDULED) with structured failure reason.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/RecordDeliveryAttemptRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Attempt recorded successfully", "schema": { "$ref": "#/definitions/DeliveryTaskResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/deliveries/{id}/proof": {
+      "post": {
+        "tags": ["Deliveries"],
+        "summary": "Submit Proof of Delivery (POD)",
+        "description": "Submits signature, OTP, or photo proof of delivery and marks parcel DELIVERED.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/SubmitDeliveryProofRequest" } }
+        ],
+        "responses": {
+          "200": { "description": "Proof accepted, parcel DELIVERED", "schema": { "$ref": "#/definitions/DeliveryTaskResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/transfers": {
+      "post": {
+        "tags": ["Transfers"],
+        "summary": "Create Inter-Branch Linehaul Transfer Manifest",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/CreateBranchTransferRequest" } }
+        ],
+        "responses": {
+          "201": { "description": "Transfer manifest created", "schema": { "$ref": "#/definitions/BranchTransferResponseEnvelope" } }
+        }
+      },
+      "get": {
+        "tags": ["Transfers"],
+        "summary": "List Inter-Branch Transfers",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "query", "name": "status", "type": "string" },
+          { "in": "query", "name": "branch_id", "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Transfers retrieved", "schema": { "$ref": "#/definitions/BranchTransferListResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/transfers/{id}": {
+      "get": {
+        "tags": ["Transfers"],
+        "summary": "Get Transfer Manifest Details",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Transfer details", "schema": { "$ref": "#/definitions/BranchTransferResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/transfers/{id}/dispatch": {
+      "post": {
+        "tags": ["Transfers"],
+        "summary": "Dispatch Transfer into Linehaul Transit",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Transfer dispatched", "schema": { "$ref": "#/definitions/BranchTransferResponseEnvelope" } }
+        }
+      }
+    },
+    "/api/v1/tenants/{tenant_id}/transfers/{id}/receive": {
+      "post": {
+        "tags": ["Transfers"],
+        "summary": "Receive Transfer at Destination Hub",
+        "description": "Receives linehaul manifest and marks all contained parcels as RECEIVED_AT_TRANSFER_BRANCH.",
+        "produces": ["application/json"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "path", "name": "tenant_id", "required": true, "type": "string", "format": "uuid" },
+          { "in": "path", "name": "id", "required": true, "type": "string", "format": "uuid" }
+        ],
+        "responses": {
+          "200": { "description": "Transfer received", "schema": { "$ref": "#/definitions/BranchTransferResponseEnvelope" } }
+        }
+      }
     }
   },
   "definitions": {
@@ -1475,6 +1737,144 @@
                 "status": { "type": "string" }
               }
             }
+          }
+        }
+      }
+    },
+    "CreateParcelRequest": {
+      "type": "object",
+      "required": ["origin_branch_id", "destination_branch_id", "sender_name", "sender_phone", "sender_address", "sender_city", "recipient_name", "recipient_phone", "recipient_address", "recipient_city", "weight_kg"],
+      "properties": {
+        "origin_branch_id": { "type": "string", "format": "uuid" },
+        "destination_branch_id": { "type": "string", "format": "uuid" },
+        "sender_name": { "type": "string", "example": "Alice Logistics" },
+        "sender_phone": { "type": "string", "example": "+15550101" },
+        "sender_address": { "type": "string", "example": "100 Main St" },
+        "sender_city": { "type": "string", "example": "New York" },
+        "recipient_name": { "type": "string", "example": "Bob Jones" },
+        "recipient_phone": { "type": "string", "example": "+15550202" },
+        "recipient_address": { "type": "string", "example": "200 Market St" },
+        "recipient_city": { "type": "string", "example": "Boston" },
+        "weight_kg": { "type": "number", "example": 4.5 },
+        "service_type": { "type": "string", "enum": ["STANDARD", "EXPRESS", "OVERNIGHT", "SAME_DAY"], "default": "STANDARD" },
+        "notes": { "type": "string" }
+      }
+    },
+    "UpdateParcelStatusRequest": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "example": "IN_TRANSIT" },
+        "remarks": { "type": "string", "example": "Scanned at linehaul bay" },
+        "branch_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "VerifyScanRequest": {
+      "type": "object",
+      "required": ["qr_payload"],
+      "properties": {
+        "qr_payload": { "type": "string", "example": "PKG-20260924-DEMO-0001" },
+        "branch_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "CreateDeliveryTaskRequest": {
+      "type": "object",
+      "required": ["parcel_id", "driver_id"],
+      "properties": {
+        "parcel_id": { "type": "string", "format": "uuid" },
+        "driver_id": { "type": "string", "format": "uuid" },
+        "vehicle_id": { "type": "string", "format": "uuid" },
+        "priority": { "type": "string", "enum": ["LOW", "NORMAL", "HIGH", "URGENT"], "default": "NORMAL" },
+        "notes": { "type": "string" }
+      }
+    },
+    "RecordDeliveryAttemptRequest": {
+      "type": "object",
+      "required": ["outcome"],
+      "properties": {
+        "outcome": { "type": "string", "enum": ["FAILED", "RESCHEDULED"] },
+        "reason": { "type": "string", "example": "CUSTOMER_UNAVAILABLE" },
+        "notes": { "type": "string" }
+      }
+    },
+    "SubmitDeliveryProofRequest": {
+      "type": "object",
+      "required": ["proof_type", "recipient_name"],
+      "properties": {
+        "proof_type": { "type": "string", "enum": ["SIGNATURE", "OTP", "PHOTO", "SAFE_DROP"] },
+        "recipient_name": { "type": "string", "example": "Bob Jones" },
+        "signature_data": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "CreateBranchTransferRequest": {
+      "type": "object",
+      "required": ["source_branch_id", "destination_branch_id", "parcel_ids"],
+      "properties": {
+        "source_branch_id": { "type": "string", "format": "uuid" },
+        "destination_branch_id": { "type": "string", "format": "uuid" },
+        "vehicle_id": { "type": "string", "format": "uuid" },
+        "driver_id": { "type": "string", "format": "uuid" },
+        "parcel_ids": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+        "notes": { "type": "string" }
+      }
+    },
+    "ParcelResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "ParcelListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "DeliveryTaskResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "DeliveryTaskListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "BranchTransferResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "BranchTransferListResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": { "type": "object" }
+      }
+    },
+    "PublicTrackingResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "example": "success" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "tracking_number": { "type": "string" },
+            "status": { "type": "string" },
+            "service_type": { "type": "string" },
+            "origin_city": { "type": "string" },
+            "destination_city": { "type": "string" },
+            "current_location": { "type": "string" },
+            "events": { "type": "array", "items": { "type": "object" } }
           }
         }
       }
