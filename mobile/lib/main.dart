@@ -4,6 +4,7 @@ import 'screens/company_screen.dart';
 import 'screens/branch_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/employee_screen.dart';
+import 'screens/delivery_screen.dart';
 import 'services/auth_api_client.dart';
 import 'core/token_storage.dart';
 
@@ -135,6 +136,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   Widget build(BuildContext context) {
     final screens = [
       _CustodyTabContent(onLogout: widget.onLogout),
+      ParcelDeliveryScreen(tenantId: _tenantId),
       CompanyScreen(tenantId: _tenantId),
       BranchScreen(tenantId: _tenantId),
       VehicleScreen(tenantId: _tenantId),
@@ -160,6 +162,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             icon: Icon(Icons.inventory_2_outlined),
             selectedIcon: Icon(Icons.inventory_2, color: Color(0xFF38BDF8)),
             label: 'Custody',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_shipping_outlined),
+            selectedIcon: Icon(Icons.local_shipping, color: Color(0xFF38BDF8)),
+            label: 'Dispatch',
           ),
           NavigationDestination(
             icon: Icon(Icons.business_outlined),

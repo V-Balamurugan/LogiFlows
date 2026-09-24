@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../core/api_config.dart';
 import '../core/token_storage.dart';
 import '../models/resource_models.dart';
+import '../models/parcel_model.dart';
 
 class ResourceApiClient {
   final http.Client _httpClient;
@@ -342,6 +343,235 @@ class ResourceApiClient {
       return EmployeeAccountStatusModel.fromJson(data);
     } else {
       throw Exception('Failed to load account status: ${response.statusCode}');
+    }
+  }
+
+  // ==========================================
+  // PHASE 4: PARCELS & DELIVERIES API METHODS
+  // ==========================================
+
+  /// Fetches parcels with optional status, branch, or search query
+  Future<List<ParcelModel>> getParcels(
+    String tenantId, {
+    String? status,
+    String? branchId,
+    String? search,
+    int limit = 50,
+  }) async {
+    final queryParams = <String, String>{
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (branchId != null && branchId.isNotEmpty) 'branch_id': branchId,
+      if (search != null && search.isNotEmpty) 'search': search,
+    };
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/parcels')
+        .replace(queryParameters: queryParams);
+    final headers = await _authHeaders();
+    final response = await _httpClient.get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      final list = (data['parcels'] as List<dynamic>? ?? []);
+      return list
+          .map((p) => ParcelModel.fromJson(p as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw Exception('Failed to load parcels: ${response.statusCode}');
+    }
+  }
+
+  /// Creates a new parcel shipment
+  Future<ParcelModel> createParcel(
+    String tenantId,
+    Map<String, dynamic> payload,
+  ) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/parcels');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 201) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      return ParcelModel.fromJson(data);
+    } else {
+      throw Exception('Failed to create parcel: ${response.statusCode}');
+    }
+  }
+
+  /// Scans / verifies parcel QR or barcode code
+  Future<Map<String, dynamic>> verifyParcelScan(
+    String tenantId,
+    String scanCode, {
+    String? branchId,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/parcels/scan');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'qr_payload': scanCode,
+        if (branchId != null) 'branch_id': branchId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      return jsonBody['data'] as Map<String, dynamic>;
+    } else {
+      throw Exception('Scan verification failed: ${response.statusCode}');
+    }
+  }
+
+  /// Fetches delivery tasks for a driver or branch
+  Future<List<DeliveryTaskModel>> getDeliveryTasks(
+    String tenantId, {
+    String? status,
+    String? driverId,
+    String? branchId,
+    int limit = 50,
+  }) async {
+    final queryParams = <String, String>{
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (driverId != null && driverId.isNotEmpty) 'driver_id': driverId,
+      if (branchId != null && branchId.isNotEmpty) 'branch_id': branchId,
+    };
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/deliveries')
+        .replace(queryParameters: queryParams);
+    final headers = await _authHeaders();
+    final response = await _httpClient.get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      final list = (data['delivery_tasks'] as List<dynamic>? ?? []);
+      return list
+          .map((t) => DeliveryTaskModel.fromJson(t as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw Exception('Failed to load delivery tasks: ${response.statusCode}');
+    }
+  }
+
+  /// Records a delivery attempt (outcome: SUCCESS, FAILED, RESCHEDULED)
+  Future<DeliveryAttemptModel> recordDeliveryAttempt(
+    String tenantId,
+    String taskId, {
+    required String outcome,
+    String? reason,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/deliveries/$taskId/attempts');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'outcome': outcome,
+        if (reason != null) 'reason': reason,
+        if (notes != null) 'notes': notes,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      return DeliveryAttemptModel.fromJson(data);
+    } else {
+      throw Exception('Failed to record delivery attempt: ${response.statusCode}');
+    }
+  }
+
+  /// Submits proof of delivery (POD)
+  Future<bool> submitDeliveryProof(
+    String tenantId,
+    String taskId, {
+    required String proofType,
+    required String recipientName,
+    String? signatureData,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/deliveries/$taskId/proof');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'proof_type': proofType,
+        'recipient_name': recipientName,
+        if (signatureData != null) 'signature_data': signatureData,
+        if (notes != null) 'notes': notes,
+      }),
+    );
+
+    return response.statusCode == 200;
+  }
+
+  /// Fetches inter-branch transfers
+  Future<List<BranchTransferModel>> getBranchTransfers(
+    String tenantId, {
+    String? status,
+    String? branchId,
+    int limit = 50,
+  }) async {
+    final queryParams = <String, String>{
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (branchId != null && branchId.isNotEmpty) 'branch_id': branchId,
+    };
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/transfers')
+        .replace(queryParameters: queryParams);
+    final headers = await _authHeaders();
+    final response = await _httpClient.get(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      final list = (data['transfers'] as List<dynamic>? ?? []);
+      return list
+          .map((t) => BranchTransferModel.fromJson(t as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw Exception('Failed to load branch transfers: ${response.statusCode}');
+    }
+  }
+
+  /// Dispatches an inter-branch transfer manifest
+  Future<bool> dispatchBranchTransfer(String tenantId, String transferId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/transfers/$transferId/dispatch');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(uri, headers: headers);
+    return response.statusCode == 200;
+  }
+
+  /// Receives an inter-branch transfer manifest at destination
+  Future<bool> receiveBranchTransfer(String tenantId, String transferId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tenants/$tenantId/transfers/$transferId/receive');
+    final headers = await _authHeaders();
+    final response = await _httpClient.post(uri, headers: headers);
+    return response.statusCode == 200;
+  }
+
+  /// Public customer tracking (no auth required)
+  Future<PublicTrackingModel> getPublicTracking(String trackingNumber) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/tracking/$trackingNumber');
+    final response = await _httpClient.get(uri);
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonBody['data'] as Map<String, dynamic>;
+      return PublicTrackingModel.fromJson(data);
+    } else {
+      throw Exception('Tracking number not found or invalid: ${response.statusCode}');
     }
   }
 }
